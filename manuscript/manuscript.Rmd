@@ -1,0 +1,2304 @@
+---
+title             : "**A cost‐effectiveness threshold for Germany based on the marginal returns of hospital spending**"
+shorttitle        : "k-estimate for Germany"
+
+author: 
+  - name          : "Sebastian Himmler"
+    affiliation   : "1,2"
+    corresponding : yes    # Define only one corresponding author
+    address       : "P.O. Box 1738, 3000 DR Rotterdam, The Netherlands"
+    email         : "himmler@eshpm.eur.nl"
+affiliation:
+  - id            : "1"
+    institution   : "Erasmus School of Health Policy & Management, Rotterdam, The Netherlands"
+  - id            : "2"
+    institution   : "Erasmus Centre for Health Economics Rotterdam (EsCHER), Rotterdam, The Netherlands"
+
+authornote: |
+  This manuscript uses the Workflow for Open Reproducible Code in Science [@van2020worcs] to ensure reproducibility and transparency. All code <!--and data--> are available at <https://github.com/sebhim/kestimateger.git>.
+
+abstract: |
+  
+  
+  <!-- https://tinyurl.com/ybremelq -->
+  
+keywords          : "keywords"
+wordcount         : "X"
+
+bibliography      : ["r-references.bib", "references.bib"]
+
+floatsintext      : no
+figurelist        : no
+tablelist         : no
+footnotelist      : no
+linenumbers       : no
+mask              : no
+draft             : no
+figsintext        : yes
+
+documentclass     : "apa6"
+classoption       : "man"
+output            : papaja::apa6_pdf
+knit              : worcs::cite_all
+
+---
+
+```{r setup, include = FALSE}
+# Packages for markdown
+library("papaja")
+library("worcs")
+library("tidyverse")
+library(bannerCommenter)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(RColorBrewer)
+library(grid)
+library(patchwork)
+# Packages for maps and spatial data
+library(rgdal)
+library(spdep)
+library(rgeos)
+library(maptools)
+library(sf)
+# Packges for Panel data and output
+library(ggplot2)
+library(viridis)
+library(stargazer)
+library(plm)
+library(lmtest)
+library(scales)
+
+# We recommend that you prepare your raw data for analysis in 'prepare_data.R',
+# and end that file with either open_data(yourdata), or closed_data(yourdata).
+# Then, uncomment the line below to load the original or synthetic data
+# (whichever is available), to allow anyone to reproduce your code:
+load_data()
+
+
+#str(data)
+data <- data %>%
+  mutate(year = as.factor(year))
+
+data_wide_reg <- data
+data_long_states <- data
+data_wide_fig <- data
+r_refs("r-references.bib")
+```
+
+
+```{r analysis-preferences}
+# Seed for random number generation
+set.seed(42)
+knitr::opts_chunk$set(cache.extra = knitr::rand_seed)
+```
+
+
+# Introduction
+
+# Methods
+
+This study follows the approach applied by @VanBaal2019. Whiley they used CVD spending and mortality due to data being available only for CVD, I have data available for all ICD10 disease categories. To allow a clear link between hospital spending and mortality, it makes sense to reduce oneself to the most important drivers of mortality. These are cardio-vascular diseases, cancer, and respiratory diseases. Unfortunately, the German mortality statistics is defective for respiratory diseases (see Appendix XX), with large outliers in mortality throughout age-groups and years. Therefore, the following will use CVD and cancer hospital spending and their link to CVD and cancer mortality, to estimate the marginal returns to hospital spending in Germany. In a second step, the obtained estimates will be used to calculate an opportunity cost-based cost-effectiveness threshold in EUR/QALY for Germany.
+
+
+Hint for R-markdown: Citation style: https://bookdown.org/yihui/rmarkdown-cookbook/bibliography.html, alt+o minimises all chunks in R-markdown script, alt+ shift + o reverses it.
+
+\newpage 
+
+## Data
+
+Several data sources needed to be combined for this analysis. First, age- and gender-group specific cancer and CVD mortality data was extracted from the German mortality statistics for all 16 German states separately. Errors in mortality rates for the state of "Bremen" due to missing population data were corrected by imputing the midpoint of previous and subsequent year and checked for plausibility using data from the population projections of the Federal statistical Office. Cost data were obtained by accessing the German DRG data. Through remote access, age- and gender-group specific average hospital spending per state could be extracted for the years 2007 to 2017. Life tables from the Federal Statistical Office provided information on the remaining life expectancy across age- and gender-groups. To approximate health related quality of life across age-groups, EQ-5D index population norms for Germany were extracted from @Janssen2014.
+
+Figure 1 shows the development of the age-group specific CVD mortality and the corresponding changes in hospital spending between 2007 and 2017. The most substantial decreases in mortality occur in the oldest age groups. Hospital spending increased along the same lines. Noteworthy is that CVD spending peaks in the age group of 85-89, while spending is higher among males. A peculiarity of the German mortality data is that mortality seems to increase for males above the age of 90 see Appendix XX). This is a result of a large discrepancy between population projections and the actual census data from 2011 in this group, as reported by @Kaus2015. Therefore, mortality data of males aged 90 and above from 2007-2010 is not comparable to later years. This is not an issue in other age-gender groups [@Kaus2015].
+
+```{r,  fig.cap = "Change in CVD mortality and hospital spending between 2007 and 2017", echo=FALSE,results='hide',fig.keep='all', fig.align="center"} 
+# Suppress info on generating figures
+
+
+#====================================================================================================
+#                                      CVD figure
+#====================================================================================================
+
+
+# Total  
+mort_100k_2007_tot <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(tot_deaths = sum(tot_deaths), pop = sum(population)) %>% 
+  mutate(tot_mortality = tot_deaths/pop)
+
+
+m1 <- mort_100k_2007_tot %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, tot_mortality, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))+ ggtitle("Total mortality rate") +
+  theme(legend.position = "none") +
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5)) +
+  scale_shape_manual(values=c(2, 8))
+
+# CVD
+mort_100k_2007_CVD <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(CVD_deaths = sum(CVD_deaths), pop = sum(population)) %>% 
+  mutate(CVD_mortality = CVD_deaths/pop)
+
+
+m2 <- mort_100k_2007_CVD %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, CVD_mortality, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("CVD mortality rate") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# Cancer
+mort_100k_2007_cancer <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(cancer_deaths = sum(cancer_deaths), pop = sum(population)) %>% 
+  mutate(cancer_mortality = cancer_deaths/pop)
+
+
+m3 <- mort_100k_2007_cancer %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, cancer_mortality, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Cancer mortality rate") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# Resp
+mort_100k_2007_resp <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(resp_deaths = sum(resp_deaths), pop = sum(population)) %>% 
+  mutate(resp_mortality = resp_deaths/pop)
+
+m4 <- mort_100k_2007_resp %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, resp_mortality, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank())  +
+  ggtitle("Resp. mortality rate") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+
+m_fig <- m2 + m3 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.background = element_rect(fill="white", colour = "black"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+  
+
+
+
+
+
+
+
+#====================================================================================================
+#                                       Cost figure
+#====================================================================================================
+
+
+# Total
+cost_100k_2007_tot <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(total_costs_pc = sum(total_costs_sum)/sum(population))
+
+
+c1 <- cost_100k_2007_tot %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, total_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Total spending per capita in Euro")+ theme(legend.position = "none") +
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# CVD
+cost_100k_2007_CVD <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(CVD_costs_pc = sum(CVD_costs_sum)/sum(population))
+
+            
+c2 <- cost_100k_2007_CVD %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, CVD_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("CVD spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# cancer
+cost_100k_2007_cancer <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(cancer_costs_pc = sum(cancer_costs_sum, na.rm = TRUE)/sum(population))
+
+
+# 2007 cancer cost NA for >90
+ind <- is.na(cost_100k_2007_cancer$cancer_costs_pc)
+sum(ind)
+
+test <- data %>%
+  filter((year =="2007" | year == "2008" |  year =="2009") & region == "SL") %>% select(cancer_costs_sum, population, year, agegroup, region, gender)
+
+
+
+
+
+c3 <- cost_100k_2007_cancer %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, cancer_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Cancer spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# Resp
+cost_100k_2007_resp <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(resp_costs_pc = sum(resp_costs_sum)/sum(population))
+
+
+c4 <- cost_100k_2007_resp %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, resp_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Resp. spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+
+
+c_fig <- c2 + c3 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.background = element_rect(fill="white", colour = "black"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+
+CVD_fig <- m2 + c2 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.background = element_rect(fill="white", colour = "white"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+
+cancer_fig <- m3 + c3 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.background = element_rect(fill="white", colour = "white"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+
+CVD_fig
+cancer_fig
+
+```
+
+Figure 2 presents the corresponding data for cancer. Decreases in cancer mortality rate are less pronounced among females (with 90+ males again being an anomaly as explained above) and occur predominantly for age groups 75-79, 80-84 and 85-89. Cancer hospital spending increased across the board with spending being considerably higher for males. Spending for cancer treatments peaks in the age group 75-79. 
+
+```{r, fig.cap = "Change in cancer mortality and hospital spending per capita between 2007 and 2017", echo=FALSE,results='hide',fig.keep='all', fig.align="center"}
+
+# CURRENTY NOT NEEDED AND QUOTED OUT
+
+#====================================================================================================
+#                                       cancer figure
+#====================================================================================================
+
+
+# Total
+cost_100k_2007_tot <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(total_costs_pc = sum(total_costs_sum)/sum(population))
+
+
+c1 <- cost_100k_2007_tot %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, total_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Total spending per capita in Euro")+ theme(legend.position = "none") +
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# CVD
+cost_100k_2007_CVD <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(CVD_costs_pc = sum(CVD_costs_sum)/sum(population))
+
+            
+c2 <- cost_100k_2007_CVD %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, CVD_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("CVD spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# cancer
+cost_100k_2007_cancer <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(cancer_costs_pc = sum(cancer_costs_sum, na.rm = TRUE)/sum(population))
+
+
+# 2007 cancer cost NA for >90
+ind <- is.na(cost_100k_2007_cancer$cancer_costs_pc)
+sum(ind)
+
+test <- data %>%
+  filter((year =="2007" | year == "2008" |  year =="2009") & region == "SL") %>% select(cancer_costs_sum, population, year, agegroup, region, gender)
+
+
+
+
+
+c3 <- cost_100k_2007_cancer %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, cancer_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Cancer spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+# Resp
+cost_100k_2007_resp <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(resp_costs_pc = sum(resp_costs_sum)/sum(population))
+
+
+c4 <- cost_100k_2007_resp %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, resp_costs_pc, color = year, shape = year)) +
+  geom_point(size = 1) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("Resp. spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 12, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+
+
+c_fig <- c2 + c3 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "bottom",
+        legend.background = element_rect(fill="white", colour = "black"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+
+#c_fig
+
+
+```
+
+To get an indication of the regional variation in changes of age- and gender-group specific mortality and hospital spending, figures 3 and 4 plot the corresponding data for CVD and cancer. While the general trend, of larger CVD mortality decreases in older ages and higher CVD hospital spending peaking before 90+, appear to be similar across regions, there are some interesting observations to be made: First, there is large regional variation in changes in mortality per 100,000 population. Second, mortality decreases are highest for Saarland, Nordrhein-Westfalen, Mecklenburg-Vorpommern, and Brandenburg. Third, there is even larger variation in changes in hospital spending per capita across regions. The highest increases can be observed for Schleswig-Holstein, Mecklenburg-Vorpommern, Brandenburg and Nordrhein-Westfalen. Increases in hospital spending are less pronounced among females and the lowest increases occuring in Saarland.
+
+```{r, fig.cap = "Regional variation in CVD mortality and cost changes from 2007 to 2017. Grey indicates mortality increases or cost decreases. Male aged 90+ not comparable.", echo=FALSE,results='hide',fig.keep='all', fig.align="center", fig.asp= 1.3}
+
+
+#====================================================================================================
+#                                       Heatmap differences regions
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       CVD mortality change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_mort_100k, CVD_costs_100k))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = CVD_mort_100k, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+data_wide_2007 <- data_wide %>%
+  subset(select = -c(y2017)) %>% 
+  filter(!is.na(y2007))
+data_wide_2017 <- data_wide %>%
+  subset(select = -c(y2007)) %>% 
+  filter(!is.na(y2017))
+
+# Merge
+data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in mortality per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_mort = y2017-y2007)
+
+# Generate change in mortality in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_mort_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+
+str(data_wide)
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+")
+
+# Graph male
+mort_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) +
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Mortality/100k") +
+  ggtitle("Male")+
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") %>% 
+  mutate(change_mort = replace(change_mort, change_mort < -3000, -3000))
+
+# Graph female
+mort_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) + 
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Mortality/100k") +
+  ggtitle("Female") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#====================================================================================================
+#                                       CVD costs change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_costs))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = CVD_costs, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+# data_wide_2007 <- data_wide %>%
+#   subset(select = -c(y2017)) %>% 
+#   filter(!is.na(y2007))
+# data_wide_2017 <- data_wide %>%
+#   subset(select = -c(y2007)) %>% 
+#   filter(!is.na(y2017))
+# 
+# # Merge
+# data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in mortality per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_costs = y2017-y2007)
+
+# Generate change in mortality in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_costs_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" )
+
+# Graph male
+costs_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 2600), breaks=seq(0,2000,by=1000)) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Costs per capita") +
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") #%>% 
+  #mutate(change_costs = replace(change_costs, change_costs < -3000, -3000))
+
+# Graph female
+costs_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) + 
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 2600), breaks=seq(0,2500,by=1000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Costs per capita") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+
+# Combine graph
+
+mort_reg_m + mort_reg_f + costs_reg_m + costs_reg_f +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+
+
+```
+
+The corresponding cancer data from figure 4, which uses the same scales as figure 3 to ease comparison, shows variation in the change in cancer mortality. Most interstingly, cancer mortality increases in several states in the highest age groups (please note that for males this is due to adjustments in the population projections). However, this may also be an artifact of knowing about cancer diagnoses among the oldest. As described by @Madea2010, the reporting of causes of death is erroneous and difficult especially among older individuals. Cancer costs increased considerably and especially in Hamburg, Thüringen, Sachsen and Schleswig-Holstein.  
+
+
+```{r, fig.cap = "Regional variation in cancer mortality and cost changes from 2007 to 2017. Grey indicates mortality increases or cost decreases. Male aged 90+ not comparable.", echo=FALSE,results='hide',fig.keep='all', fig.align="center", fig.asp= 1.3}
+
+
+#====================================================================================================
+#                                       Heatmap differences regions
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       cancer mortality change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, cancer_mort_100k, cancer_costs_100k))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = cancer_mort_100k, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+data_wide_2007 <- data_wide %>%
+  subset(select = -c(y2017)) %>% 
+  filter(!is.na(y2007))
+data_wide_2017 <- data_wide %>%
+  subset(select = -c(y2007)) %>% 
+  filter(!is.na(y2017))
+
+# Merge
+data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in mortality per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_mort = y2017-y2007)
+
+# Generate change in mortality in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_mort_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+
+str(data_wide)
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+")
+
+# Graph male
+mort_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) +
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Mortality/100k") +
+  ggtitle("Male")+
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") %>% 
+  mutate(change_mort = replace(change_mort, change_mort < -3000, -3000))
+
+# Graph female
+mort_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) + 
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Mortality/100k") +
+  ggtitle("Female") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+#====================================================================================================
+#                                       cancer costs change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, cancer_costs))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = cancer_costs, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+# data_wide_2007 <- data_wide %>%
+#   subset(select = -c(y2017)) %>% 
+#   filter(!is.na(y2007))
+# data_wide_2017 <- data_wide %>%
+#   subset(select = -c(y2007)) %>% 
+#   filter(!is.na(y2017))
+# 
+# # Merge
+# data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in mortality per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_costs = y2017-y2007)
+
+# Generate change in mortality in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_costs_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" )
+
+# Graph male
+costs_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 2600), breaks=seq(0,2000,by=1000)) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Costs per capita") +
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") #%>% 
+  #mutate(change_costs = replace(change_costs, change_costs < -3000, -3000))
+
+# Graph female
+costs_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) + 
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 2600), breaks=seq(0,2000,by=1000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Costs per capita") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+
+# Combine graph
+
+mort_reg_m + mort_reg_f + costs_reg_m + costs_reg_f +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+
+
+```
+
+
+
+\newpage
+
+
+
+```{r fig.align="center", fig.cap="Regional variation in total mortality and hospital spending", fig.keep='all', include=FALSE, results='hide'}
+
+# CURRENTLY NOT NEEDED, in modify chunk options set to Show nothing
+
+#====================================================================================================
+#                                       Mortality figure regions
+#====================================================================================================
+
+cnames <- aggregate(cbind(long, lat) ~ id, data=shp_df, FUN=function(x)mean(range(x)))
+
+#====================================================================================================
+#                                       Total mortality
+#====================================================================================================
+
+# Mortality total 2007  data
+mort100k_state_tot <- data %>%
+  filter((year =="2007" | year =="2017")) %>% 
+  group_by(region, year) %>%
+  summarise(tot_deaths = sum(tot_deaths), pop = sum(population)) %>% 
+  mutate(tot_mortality = (tot_deaths/pop)*100000) %>% mutate(id = region) %>% select(id, year, tot_mortality) 
+
+
+# Merge data with shapefile
+merge <- merge(shp_df, mort100k_state_tot) 
+
+# Fill 
+tot_2007 <- merge %>% filter(year =="2007") 
+tot_2007 <- tot_2007 %>% ggplot() + 
+  geom_polygon(data = tot_2007, aes(x = long, y = lat, group = group, color = "grey", fill = tot_mortality), 
+               colour = "grey", size = 0.5) +
+               theme_void() + 
+               coord_quickmap() +
+               geom_text(data = cnames, aes(x = long, y = lat, label = id), size = 2) +
+  scale_fill_gradient(low = "grey90", high = "red4", limits = c(850, 1500)) +
+  ggtitle("2007") + theme(legend.title = element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))
+
+tot_2017 <- merge %>% filter(year =="2017") 
+tot_2017 <- tot_2017 %>% ggplot() + 
+  geom_polygon(data = tot_2017, aes(x = long, y = lat, group = group, color = "grey", fill = tot_mortality), 
+               colour = "grey", size = 0.5) +
+  theme_void() + 
+  coord_quickmap() +
+  geom_text(data = cnames, aes(x = long, y = lat, label = id), size = 2) +
+  scale_fill_gradient(low = "grey90", high = "red4", limits = c(850, 1500)) +
+  ggtitle("2017") +  theme(legend.title = element_blank()) +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+map_tot <- grid.arrange(tot_2007, tot_2017, ncol = 2, top = textGrob("Total mortality per 100,000"))
+map_tot
+
+```
+
+```{r fig.align="center", fig.cap="Regional variation in total hospital spending", fig.keep='all', include=FALSE}
+
+# CURRENTLY NOT NEEDED, in modify chunk options set to Show nothing
+#====================================================================================================
+#                                       Cost figure regions
+#====================================================================================================
+
+
+# Costs total 2007  data
+cost_state_2007_tot <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(region, year) %>%
+  summarise(total_costs_pc = sum(total_costs_sum)/sum(population))  %>%
+  mutate(id = region) %>% 
+  select(id, year, total_costs_pc) 
+
+
+# Merge data
+merge <- merge(shp_df, cost_state_2007_tot) 
+
+# Figure
+tot_2007 <- merge %>% filter(year =="2007") 
+tot_2007 <- tot_2007 %>% ggplot() + 
+  geom_polygon(data = merge, aes(x = long, y = lat, group = group, color = "grey", fill = total_costs_pc), 
+               colour = "grey", size = 0.5) +
+  theme_void() + 
+  coord_quickmap() +
+  geom_text(data = cnames, aes(x = long, y = lat, label = id), size = 2) +
+  scale_fill_gradient(low = "grey90", high = "dodgerblue4", limits = c(450, 1050)) +
+  ggtitle("2007") +  theme(legend.title = element_blank()) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+
+
+
+tot_2017 <- merge %>% filter(year =="2017") 
+tot_2017 <- tot_2017 %>% ggplot() + 
+  geom_polygon(data = tot_2017, aes(x = long, y = lat, group = group, color = "grey", fill = total_costs_pc), 
+      colour = "grey", size = 0.5) +
+      theme_void() + 
+      coord_quickmap() +
+      geom_text(data = cnames, aes(x = long, y = lat, label = id), size = 2) +
+      scale_fill_gradient(low = "grey90", high = "dodgerblue4", limits = c(450, 1050)) +
+  ggtitle("2017") +  theme(legend.title = element_blank()) +
+  theme(plot.title = element_text(size = 12, hjust = 0.5))
+  
+
+map_tot <- grid.arrange(tot_2007, tot_2017, ncol = 2,
+                        top = textGrob("Total hospital spending per capita",
+                                       gp = gpar(fontsize = 12)))
+map_tot
+
+```
+
+\newpage
+
+```{r fig.align="center", fig.cap="Temporal variation in mortality and costs CVD and cancer", fig.keep='all', results='hide', fig.asp= 1.3}
+
+data_wide <- data_wide_fig 
+
+#====================================================================================================
+#                                       Conditioning on 60+, dropping males 90+
+#====================================================================================================
+
+
+# is.data.frame(data)
+# dim(data)
+# str(data)
+# head(data)
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018)
+# Drop 90+ men before 2011 due to comparability issues (after 2011 based on widely different population values)
+
+# Drop just males 90+
+# data <- data %>% filter(!(agegroup =="90+" & gender =="Male")) 
+
+
+data <- data %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") 
+
+
+
+#====================================================================================================
+#                                       Reshape for collapsing data 
+#====================================================================================================
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_costs, CVD_deaths, cancer_costs, cancer_deaths, CVD_N, cancer_N, population))
+
+
+data_wide <- data_wide %>% 
+  pivot_wider(names_from = region, values_from = c(CVD_costs, CVD_deaths, cancer_costs, cancer_deaths, CVD_N, cancer_N, population), names_prefix = "bula_")
+
+
+# Change censored cancer cost and cases which were censored due to low number of observations to value 
+# in following year (2 instances)
+# Otherwise complete observation would be lost
+
+data_wide <- data_wide %>% 
+  mutate(cancer_costs_bula_SL = replace_na(cancer_costs_bula_SL, cancer_costs_bula_SL[26])) %>% 
+  mutate(cancer_N_bula_SL = replace_na(cancer_N_bula_SL, cancer_N_bula_SL[26])) %>% 
+  mutate(cancer_costs_bula_HB = replace_na(cancer_costs_bula_HB, cancer_costs_bula_HB[143])) %>% 
+  mutate(cancer_N_bula_HB = replace_na(cancer_N_bula_HB, cancer_N_bula_HB[143]))
+
+# Combine State costs
+
+# CVD
+data_wide <- data_wide %>% 
+  mutate(tot_CVD_costs = (CVD_costs_bula_SH*CVD_N_bula_SH +
+                        CVD_costs_bula_HH*CVD_N_bula_HH +
+                        CVD_costs_bula_NI*CVD_N_bula_NI +
+                        CVD_costs_bula_HB*CVD_N_bula_HB +
+                        CVD_costs_bula_NW*CVD_N_bula_NW +
+                        CVD_costs_bula_HE*CVD_N_bula_HE +
+                        CVD_costs_bula_RP*CVD_N_bula_RP +
+                        CVD_costs_bula_BW*CVD_N_bula_BW +
+                        CVD_costs_bula_BY*CVD_N_bula_BY +
+                        CVD_costs_bula_SL*CVD_N_bula_SL +
+                        CVD_costs_bula_BE*CVD_N_bula_BE +
+                        CVD_costs_bula_BB*CVD_N_bula_BB +
+                        CVD_costs_bula_MV*CVD_N_bula_MV +
+                        CVD_costs_bula_SN*CVD_N_bula_SN +
+                        CVD_costs_bula_ST*CVD_N_bula_ST +
+                        CVD_costs_bula_TH*CVD_N_bula_TH))
+
+# Cancer
+data_wide <- data_wide %>% 
+  mutate(tot_cancer_costs = (cancer_costs_bula_SH*cancer_N_bula_SH +
+                        cancer_costs_bula_HH*cancer_N_bula_HH +
+                        cancer_costs_bula_NI*cancer_N_bula_NI +
+                        cancer_costs_bula_HB*cancer_N_bula_HB +
+                        cancer_costs_bula_NW*cancer_N_bula_NW +
+                        cancer_costs_bula_HE*cancer_N_bula_HE +
+                        cancer_costs_bula_RP*cancer_N_bula_RP +
+                        cancer_costs_bula_BW*cancer_N_bula_BW +
+                        cancer_costs_bula_BY*cancer_N_bula_BY +
+                        cancer_costs_bula_SL*cancer_N_bula_SL +
+                        cancer_costs_bula_BE*cancer_N_bula_BE +
+                        cancer_costs_bula_BB*cancer_N_bula_BB +
+                        cancer_costs_bula_MV*cancer_N_bula_MV +
+                        cancer_costs_bula_SN*cancer_N_bula_SN +
+                        cancer_costs_bula_ST*cancer_N_bula_ST +
+                        cancer_costs_bula_TH*cancer_N_bula_TH))
+
+# Combine State mortality
+
+# CVD
+data_wide <- data_wide %>% 
+  mutate(tot_CVD_deaths = (CVD_deaths_bula_SH +
+                        CVD_deaths_bula_HH +
+                        CVD_deaths_bula_NI +
+                        CVD_deaths_bula_HB +
+                        CVD_deaths_bula_NW +
+                        CVD_deaths_bula_HE +
+                        CVD_deaths_bula_RP +
+                        CVD_deaths_bula_BW +
+                        CVD_deaths_bula_BY +
+                        CVD_deaths_bula_SL +
+                        CVD_deaths_bula_BE +
+                        CVD_deaths_bula_BB +
+                        CVD_deaths_bula_MV +
+                        CVD_deaths_bula_SN +
+                        CVD_deaths_bula_ST +
+                        CVD_deaths_bula_TH))
+
+# Cancer
+data_wide <- data_wide %>% 
+  mutate(tot_cancer_deaths = (cancer_deaths_bula_SH +
+                        cancer_deaths_bula_HH +
+                        cancer_deaths_bula_NI +
+                        cancer_deaths_bula_HB +
+                        cancer_deaths_bula_NW +
+                        cancer_deaths_bula_HE +
+                        cancer_deaths_bula_RP +
+                        cancer_deaths_bula_BW +
+                        cancer_deaths_bula_BY +
+                        cancer_deaths_bula_SL +
+                        cancer_deaths_bula_BE +
+                        cancer_deaths_bula_BB +
+                        cancer_deaths_bula_MV +
+                        cancer_deaths_bula_SN +
+                        cancer_deaths_bula_ST +
+                        cancer_deaths_bula_TH))
+
+# Combine population
+data_wide <- data_wide %>% 
+  mutate(tot_population = (population_bula_SH +
+                                population_bula_HH +
+                                population_bula_NI +
+                                population_bula_HB +
+                                population_bula_NW +
+                                population_bula_HE +
+                                population_bula_RP +
+                                population_bula_BW +
+                                population_bula_BY +
+                                population_bula_SL +
+                                population_bula_BE +
+                                population_bula_BB +
+                                population_bula_MV +
+                                population_bula_SN +
+                                population_bula_ST +
+                                population_bula_TH))
+
+
+data_wide <- data_wide %>%
+  select(year, gender, agegroup, tot_CVD_costs, tot_cancer_costs, tot_CVD_deaths, tot_cancer_deaths, tot_population)
+
+
+#====================================================================================================
+#                                       Generate IDs
+#====================================================================================================
+
+
+# Generate ID for gender x age  groups
+data_wide <- data_wide %>% group_by(gender, agegroup) %>% mutate(ID = cur_group_id())
+
+# summarize the variables
+# summary(data_wide[, c("ID", "year")])
+# 
+# class(data_wide$ID)
+# class(data_wide$year)
+
+# Recode ID to be factor
+data_wide <- data_wide %>% mutate(ID = as.factor(ID))
+# class(data_wide$ID)
+
+
+#====================================================================================================
+#                               Generate mortality and costs per capita
+#====================================================================================================
+
+# Prepare variables
+data_wide <- data_wide %>% 
+  mutate(CVD_mort = tot_CVD_deaths/tot_population) %>%
+  mutate(cancer_mort = tot_cancer_deaths/tot_population) %>%
+  mutate(CVD_costs = tot_CVD_costs/tot_population) %>%
+  mutate(cancer_costs = tot_cancer_costs/tot_population) %>%
+  mutate(log_CVD_mort = log(CVD_mort)) %>%
+  mutate(log_cancer_mort = log(cancer_mort)) %>%
+  mutate(log_CVD_costs = log(CVD_costs)) %>%
+  mutate(log_cancer_costs = log(cancer_costs))
+  
+
+
+# #====================================================================================================
+# #                           Prepare mortality data for CVD and cancer
+# #====================================================================================================
+# 
+# 
+# # Keep observations with 0 mortality by adding constant 0.00001 and drop columns not needed
+# data <- data %>%
+#   mutate(log_CVD_mort_100k = recode(log_CVD_mort_100k, "-Inf" = log(10^-5))) %>%
+#   mutate(log_cancer_mort_100k = recode(log_cancer_mort_100k, "-Inf" = log(10^-5))) %>% 
+#   select(ID, year, log_CVD_mort_100k, CVD_mort_100k, log_CVD_costs_100k, CVD_costs_100k, log_cancer_mort_100k, cancer_mort_100k, log_cancer_costs_100k, cancer_costs_100k) 
+# 
+# # Drop NAs, 2 observations dropped as cancer cost was not available, censored by DRG data holder
+# # due to number of cases below 5
+# data <- data %>%  filter(!is.na(log_CVD_costs_100k))
+# data <- data %>%  filter(!is.na(log_cancer_costs_100k))
+
+
+#====================================================================================================
+#                       Create lagged values and individual and time dummies
+#====================================================================================================
+
+
+# Setting dataset to be panel 
+# class(data_wide)
+data_wide <- pdata.frame(data_wide, index = c("ID", "year"))
+
+# xtsum panel summary
+# is.pbalanced(data_wide)
+# pdim(data_wide)
+
+# Generate lagged cost variables
+data_wide <- data_wide %>%
+  group_by(ID) %>%
+  mutate(lag_log_CVD_costs=dplyr::lag(log_CVD_costs)) %>% 
+  mutate(lag_log_cancer_costs=dplyr::lag(log_cancer_costs)) %>% 
+  mutate(lag_CVD_costs=dplyr::lag(CVD_costs)) %>% 
+  mutate(lag_cancer_costs=dplyr::lag(cancer_costs))
+
+# Generate ID dummies
+# model.matrix( ~ ID - 1, data_wide)
+# data_wide <- data.frame(data_wide, model.matrix( ~ ID - 1, data_wide))
+
+
+# Generate year dummies
+# model.matrix( ~ year - 1, data_wide)
+# data_wide <- data.frame(data_wide, model.matrix( ~ year - 1, data_wide))
+
+
+#====================================================================================================
+#                             Manually creating first differences
+#====================================================================================================
+
+
+# Panel set data
+data_wide <- pdata.frame(data_wide, index = c("ID", "year"))
+
+
+# Mortality CVD
+data_wide <- data_wide %>% mutate(d_log_CVD_mort = diff(data_wide$log_CVD_mort))
+data_wide <- data_wide %>% mutate(d_CVD_mort = diff(data_wide$CVD_mort))
+
+# Costs CVD  
+data_wide <- data_wide %>% mutate(d_log_CVD_costs = diff(data_wide$log_CVD_costs))
+data_wide <- data_wide %>% mutate(d_CVD_costs = diff(data_wide$CVD_costs))
+
+# Lag costs CVD
+data_wide <- data_wide %>% mutate(d_lag_log_CVD_costs = diff(data_wide$lag_log_CVD_costs))
+data_wide <- data_wide %>% mutate(d_lag_CVD_costs = diff(data_wide$lag_CVD_costs))
+
+
+# Mortality cancer
+data_wide <- data_wide %>% mutate(d_log_cancer_mort = diff(data_wide$log_cancer_mort))
+data_wide <- data_wide %>% mutate(d_cancer_mort = diff(data_wide$cancer_mort))
+
+# Costs cancer  
+data_wide <- data_wide %>% mutate(d_log_cancer_costs = diff(data_wide$log_cancer_costs))
+data_wide <- data_wide %>% mutate(d_cancer_costs = diff(data_wide$cancer_costs))
+
+# Lag costs cancer
+data_wide <- data_wide %>% mutate(d_lag_log_cancer_costs = diff(data_wide$lag_log_cancer_costs))
+data_wide <- data_wide %>% mutate(d_lag_cancer_costs = diff(data_wide$lag_cancer_costs))
+
+
+#====================================================================================================
+#                             Run regression using CVD mortality and costs
+#====================================================================================================
+
+
+# Filter (region quite different, but all positive first coefficient, NW lagged negative slightly larger
+# Also tested if the same when not logging but effect persists
+# Testing if the same when just comparing two years 2009 and 2017, 2007 and 2008 needed for creating 
+# lagged variables and first differences, still one coefficient positive the other negative, with
+# the positive one being larger.
+data_agg_graph <- data_wide
+
+# data_wide <- data_wide %>% 
+#   filter(!(agegroup == "90+" & gender =="Male"))
+# 
+# # OLS model 
+# m1_OLS <- lm(log_CVD_mort ~ log_CVD_costs + lag_log_CVD_costs + year + ID , data = data_wide)
+# m1_OLS
+# 
+# m1_OLS_lin <- lm(CVD_mort ~ CVD_costs + lag_CVD_costs + year + ID , data = data_wide)
+# m1_OLS_lin
+# 
+# 
+# # # Subset data and run with all variables
+# # CVD_fd_data <- data %>% 
+# #   select(d_log_CVD_mort, d_log_CVD_costs, d_lag_log_CVD_costs, ID1:ID208, year2007:year2017)
+# # 
+# # # First difference model on subsetted data
+# # lm(d_log_CVD_mort ~ . , data = CVD_fd_data)
+# 
+# # First difference model on full data using year and ID as factors
+# # same output, different reference categories for year and ID
+# m2_FD <- lm(d_log_CVD_mort ~ d_log_CVD_costs + d_lag_log_CVD_costs + year + ID , data = data_wide)
+# summ(m2_FD)
+# 
+# # This would correspond to a replication of van Baal et al. (2018)
+# # On country level, with ageXgender cells as intercepts and year intercepts
+# 
+# m2_FD_lin <- lm(d_CVD_mort ~ d_CVD_costs + d_lag_CVD_costs + year + ID, data = data_wide)
+# m2_FD_lin
+# 
+# 
+# coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+# 
+# summ(m2_FD)
+# summ(m1_OLS)
+
+
+#====================================================================================================
+#                             Run regression using cancer mortality and costs
+#====================================================================================================
+
+
+# Filter (region quite different, but all positive first coefficient, NW lagged negative slightly larger
+# Also tested if the same when not logging but effect persists
+# Testing if the same when just comparing two years 2009 and 2017, 2007 and 2008 needed for creating 
+# lagged variables and first differences, still one coefficient positive the other negative, with
+# the positive one being larger.
+
+#data_wide <- data_wide %>% 
+#  filter(gender == "Male")
+
+# OLS model 
+# m1_OLS <- lm(log_cancer_mort ~ log_cancer_costs + lag_log_cancer_costs + year + ID , data = data_wide)
+# m1_OLS
+# 
+# m1_OLS_lin <- lm(cancer_mort ~ cancer_costs + lag_cancer_costs + year + ID , data = data_wide)
+# m1_OLS_lin
+
+
+# # Subset data and run with all variables
+# cancer_fd_data <- data %>% 
+#   select(d_log_cancer_mort, d_log_cancer_costs, d_lag_log_cancer_costs, ID1:ID208, year2007:year2017)
+# 
+# # First difference model on subsetted data
+# lm(d_log_cancer_mort ~ . , data = cancer_fd_data)
+
+# First difference model on full data using year and ID as factors
+# same output, different reference categories for year and ID
+# m2_FD <- lm(d_log_cancer_mort ~ d_log_cancer_costs + d_lag_log_cancer_costs + year + ID, data = data_wide)
+# summ(m2_FD)
+# 
+# m2_FD_lin <- lm(d_cancer_mort ~ d_cancer_costs + d_lag_cancer_costs + year + ID, data = data_wide)
+# m2_FD_lin
+# 
+# 
+# coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+# 
+# summ(m2_FD)
+# summ(m1_OLS)
+
+
+
+#====================================================================================================
+#                        Plotting mort diff vs 
+#====================================================================================================
+
+data_wide %>% 
+  ggplot()+
+  geom_point(aes(x= cancer_costs, y = cancer_mort, colour = agegroup, shape = gender))
+
+data_wide %>% 
+  ggplot()+
+  geom_point(aes(x= CVD_costs, y = CVD_mort, colour = agegroup, shape = gender))
+
+
+
+#====================================================================================================
+#                             Plot differences over time in mort CVD
+#====================================================================================================
+
+
+data_wide <- data_agg_graph
+
+# Male
+m_CVD_mort <- data_wide %>% 
+  filter(gender == "Male", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_CVD_mort)) +
+  scale_fill_viridis(limits=c(-0.011, 0), breaks=seq(-0.010,0,by=0.005)) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Change in mortality per capita") +
+  ggtitle("Male")+
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Female
+f_CVD_mort <-data_wide %>% 
+  filter(gender == "Female", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_CVD_mort)) +
+  scale_fill_viridis(limits=c(-0.011, 0), breaks=seq(-0.010,0,by=0.005)) +
+  theme(axis.title.y=element_blank(),
+          axis.text.y=element_blank(),
+          axis.ticks.y=element_blank()) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Change in mortality per capita") +
+  ggtitle("Female") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#====================================================================================================
+#                             Plot differences over time in costs CVD
+#====================================================================================================
+
+
+# Male
+m_CVD_costs <- data_wide %>% 
+  filter(gender == "Male", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_CVD_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 75), breaks=seq(0,75,by=25)) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Change in costs per capita") +
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Female
+f_CVD_costs <-data_wide %>% 
+  filter(gender == "Female", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_CVD_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 75), breaks=seq(0,75,by=25)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Change in costs per capita") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Combine graph
+
+
+m_CVD_mort  + f_CVD_mort  + m_CVD_costs + f_CVD_costs +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+
+
+
+
+
+
+#====================================================================================================
+#                             Plot differences over time in mort cancer
+#====================================================================================================
+
+
+data_wide <- data_agg_graph
+
+# Male
+m_cancer_mort <- data_wide %>% 
+  filter(gender == "Male", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_cancer_mort)) +
+  scale_fill_viridis(limits=c(-0.002, 0), breaks=seq(-0.002,0,by=0.001)) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Change in mortality per capita") +
+  ggtitle("Male")+
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Female
+f_cancer_mort <-data_wide %>% 
+  filter(gender == "Female", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_cancer_mort)) +
+  scale_fill_viridis(limits=c(-0.002, 0), breaks=seq(-0.002,0,by=0.001)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(axis.title.x=element_blank(),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Change in mortality per capita") +
+  ggtitle("Female") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+#====================================================================================================
+#                             Plot differences over time in costs cancer
+#====================================================================================================
+
+
+# Male
+m_cancer_costs <- data_wide %>% 
+  filter(gender == "Male", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_cancer_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 75), breaks=seq(0,75,by=25)) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Change in costs per capita") +
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Female
+f_cancer_costs <-data_wide %>% 
+  filter(gender == "Female", year != "2007") %>%
+  ggplot(aes(x = agegroup, y = reorder(year, desc(year)))) +
+  geom_tile(aes(fill = d_cancer_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 75), breaks=seq(0,75,by=25)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Change in costs per capita") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Combine graph
+
+
+m_cancer_mort  + f_cancer_mort  + m_cancer_costs + f_cancer_costs +
+  plot_layout(guides = "collect") & theme(legend.position = "bottom")
+
+
+
+
+
+
+
+```
+
+
+\pagebreak
+
+
+
+## Regression analysis
+
+As age-group specific mortality for males 90+ is not comparable (see Data section) before and after the year 2011, we dropped the corresponding observations for the years 2007 to 2010. 
+
+
+## QALY calculations
+
+
+
+
+\newpage
+
+# Results
+The regression output for either using all states or aggregated on country level are presented in the following.
+
+
+
+
+```{r results ='asis', message = FALSE, echo = FALSE}
+
+
+
+#====================================================================================================
+#====================================================================================================
+#                                                                                                   
+# Outline:  Regression analysis                                          
+#
+# Input:    clean_data.rda
+# Output:   Tables and Figures
+#
+#====================================================================================================
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       Load R packages and data                                          
+#====================================================================================================
+
+# 
+# library(bannerCommenter)
+# library(tidyverse)
+# library(dplyr)
+# #library(stats)
+# #library(collapse)
+# library(gridExtra)
+# library(ggplot2)
+# 
+# library(stargazer)
+# library(plm)
+# library(lmtest)
+
+
+#load("./Data_ready/clean_data.rda")
+
+
+#====================================================================================================
+#                                       Conditioning on 60+, dropping males 90+
+#====================================================================================================
+
+
+# is.data.frame(data)
+# dim(data)
+# str(data)
+# head(data)
+
+data <- data_long_states
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018)
+# Drop 90+ men before 2011 due to comparability issues (after 2011 based on widely different population values)
+data <- data %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | (agegroup =="90+" & gender =="Female")) 
+
+#str(data)
+
+#====================================================================================================
+#                                       Generate IDs
+#====================================================================================================
+
+
+# Generate ID for gender x age x state groups
+data <- data %>% group_by(region, gender, agegroup) %>% mutate(ID = cur_group_id())
+
+# summarize the variables 'state' and 'year'
+#summary(data[, c("ID", "year")])
+
+# class(data$ID)
+# class(data$year)
+
+# Recode ID to be factor
+data <- data %>% mutate(ID = as.factor(ID))
+# class(data$ID)
+
+
+#====================================================================================================
+#                           Prepare mortality data for CVD and cancer
+#====================================================================================================
+
+
+# Keep observations with 0 mortality by adding constant 0.00001 and drop columns not needed
+data <- data %>%
+  mutate(log_CVD_mort_100k = recode(log_CVD_mort_100k, "-Inf" = log(10^-5))) %>%
+  mutate(log_cancer_mort_100k = recode(log_cancer_mort_100k, "-Inf" = log(10^-5))) %>% 
+  select(ID, year, log_CVD_mort_100k, log_CVD_costs_100k, log_cancer_mort_100k, log_cancer_costs_100k) 
+
+# Drop NAs, 2 observations dropped as cancer cost was not available, censored by DRG data holder
+# due to number of cases below 5
+data <- data %>%  filter(!is.na(log_CVD_costs_100k))
+data <- data %>%  filter(!is.na(log_cancer_costs_100k))
+
+
+#====================================================================================================
+#                       Create lagged values and individual and time dummies
+#====================================================================================================
+
+
+# Setting dataset to be panel (apparently does not work as class does not change)
+# class(data)
+data <- pdata.frame(data, index = c("ID", "year"))
+
+# xtsum panel summary
+# is.pbalanced(data)
+# pdim(data)
+
+# Generate lagged cost variables
+data <- data %>%
+  group_by(ID) %>%
+  mutate(lag_log_CVD_costs_100k=dplyr::lag(log_CVD_costs_100k)) %>% 
+  mutate(lag_log_cancer_costs_100k=dplyr::lag(log_cancer_costs_100k))
+
+# Generate ID dummies
+# model.matrix( ~ ID - 1, data)
+# data <- data.frame(data, model.matrix( ~ ID - 1, data))
+# 
+# # Generate year dummies
+# model.matrix( ~ year - 1, data)
+# data <- data.frame(data, model.matrix( ~ year - 1, data))
+
+
+#====================================================================================================
+#                             Manually creating first differences
+#====================================================================================================
+
+
+# Panel set data
+data <- pdata.frame(data, index = c("ID", "year"))
+
+
+# Mortality CVD
+data <- data %>% mutate(d_log_CVD_mort_100k = diff(data$log_CVD_mort_100k))
+  
+# Costs CVD  
+data <- data %>% mutate(d_log_CVD_costs_100k = diff(data$log_CVD_costs_100k))
+
+# Lag costs CVD
+data <- data %>% mutate(d_lag_log_CVD_costs_100k = diff(data$lag_log_CVD_costs_100k))
+
+
+# Mortality cancer
+data <- data %>% mutate(d_log_cancer_mort_100k = diff(data$log_cancer_mort_100k))
+
+# Costs cancer  
+data <- data %>% mutate(d_log_cancer_costs_100k = diff(data$log_cancer_costs_100k))
+
+# Lag costs cancer
+data <- data %>% mutate(d_lag_log_cancer_costs_100k = diff(data$lag_log_cancer_costs_100k))
+
+
+#====================================================================================================
+#                             Run regression using CVD mortality and costs
+#====================================================================================================
+
+# Filter
+#data <- data %>% 
+#  filter(region == c("SL"))
+
+# OLS model 
+CVD_OLS <- lm(log_CVD_mort_100k ~ log_CVD_costs_100k + lag_log_CVD_costs_100k + year + ID , data = data)
+
+# First difference model on full data using year and ID as factors
+CVD_FD <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k + year + ID, data = data)
+
+
+rob_se <- list(sqrt(diag(vcovHC(CVD_OLS, type = "HC0", cluster="ID"))),
+    sqrt(diag(vcovHC(CVD_FD, type = "HC0", cluster ="ID"))))
+
+# 
+# OLS_se <- coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# FD_se <- coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+
+
+stargazer(CVD_OLS, CVD_FD,
+          type = "latex",
+          title = "Regression results CVD using states",
+          omit = c("year", "ID"),
+          digits = 3,
+          se = rob_se,
+          header = F,
+          single.row = TRUE,
+          column.labels = c("(I)", "(II)")
+          )
+
+#====================================================================================================
+#                             Run regression using cancer mortality and costs
+#====================================================================================================
+
+
+# OLS model 
+cancer_OLS <- lm(log_cancer_mort_100k ~ log_cancer_costs_100k + lag_log_cancer_costs_100k + year + ID , data = data)
+
+# First difference model on full data using year and ID as factors
+cancer_FD <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k + year + ID, data = data)
+
+
+rob_se <- list(sqrt(diag(vcovHC(cancer_OLS, type = "HC0", cluster ="ID"))), 
+    sqrt(diag(vcovHC(cancer_FD, type = "HC0", cluster ="ID"))))
+
+# 
+# OLS_se <- coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# FD_se <- coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+
+
+stargazer(cancer_OLS, cancer_FD,
+          type = "latex",
+          title = "Regression results cancer using states",
+          omit = c("year", "ID"),
+          digits = 3,
+          se = rob_se,
+          header = F,
+          single.row = TRUE,
+          column.labels = c("(I)", "(II)")
+          )
+
+```
+
+
+
+```{r results ='asis', message = FALSE, echo = FALSE}
+
+
+
+#====================================================================================================
+#====================================================================================================
+#                                                                                                   
+# Outline:  Regression analysis                                          
+#
+# Input:    clean_data.rda
+# Output:   Tables and Figures
+#
+#====================================================================================================
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       Load R packages and data                                          
+#====================================================================================================
+
+
+# library(bannerCommenter)
+# library(tidyverse)
+# library(dplyr)
+# #library(stats)
+# #library(collapse)
+# library(gridExtra)
+# library(ggplot2)
+# 
+# library(stargazer)
+# library(plm)
+# library(lmtest)
+# library(scales)
+
+
+#load("./Data_ready/clean_data.rda")
+
+
+#====================================================================================================
+#                                       Conditioning on 60+, dropping males 90+
+#====================================================================================================
+
+
+# is.data.frame(data)
+# dim(data)
+# str(data)
+# head(data)
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018)
+# Drop 90+ men before 2011 due to comparability issues (after 2011 based on widely different population values)
+
+# Drop just males 90+
+# data <- data %>% filter(!(agegroup =="90+" & gender =="Male")) 
+
+
+data_wide <- data_wide_reg %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | (agegroup =="90+" & gender =="Female")) 
+
+
+
+#====================================================================================================
+#                                       Reshape for collapsing data 
+#====================================================================================================
+
+# Reshape data to wide format
+
+data_wide <- data_wide %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_costs, CVD_deaths, cancer_costs, cancer_deaths, CVD_N, cancer_N, population))
+
+
+data_wide <- data_wide %>% 
+  pivot_wider(names_from = region, values_from = c(CVD_costs, CVD_deaths, cancer_costs, cancer_deaths, CVD_N, cancer_N, population), names_prefix = "bula_")
+
+
+# Change censored cancer cost and cases which were censored due to low number of observations to value 
+# in following year (2 instances)
+# Otherwise complete observation would be lost
+
+data_wide <- data_wide %>% 
+  mutate(cancer_costs_bula_SL = replace_na(cancer_costs_bula_SL, cancer_costs_bula_SL[26])) %>% 
+  mutate(cancer_N_bula_SL = replace_na(cancer_N_bula_SL, cancer_N_bula_SL[26])) %>% 
+  mutate(cancer_costs_bula_HB = replace_na(cancer_costs_bula_HB, cancer_costs_bula_HB[143])) %>% 
+  mutate(cancer_N_bula_HB = replace_na(cancer_N_bula_HB, cancer_N_bula_HB[143]))
+
+# Combine State costs
+
+# CVD
+data_wide <- data_wide %>% 
+  mutate(tot_CVD_costs = (CVD_costs_bula_SH*CVD_N_bula_SH +
+                        CVD_costs_bula_HH*CVD_N_bula_HH +
+                        CVD_costs_bula_NI*CVD_N_bula_NI +
+                        CVD_costs_bula_HB*CVD_N_bula_HB +
+                        CVD_costs_bula_NW*CVD_N_bula_NW +
+                        CVD_costs_bula_HE*CVD_N_bula_HE +
+                        CVD_costs_bula_RP*CVD_N_bula_RP +
+                        CVD_costs_bula_BW*CVD_N_bula_BW +
+                        CVD_costs_bula_BY*CVD_N_bula_BY +
+                        CVD_costs_bula_SL*CVD_N_bula_SL +
+                        CVD_costs_bula_BE*CVD_N_bula_BE +
+                        CVD_costs_bula_BB*CVD_N_bula_BB +
+                        CVD_costs_bula_MV*CVD_N_bula_MV +
+                        CVD_costs_bula_SN*CVD_N_bula_SN +
+                        CVD_costs_bula_ST*CVD_N_bula_ST +
+                        CVD_costs_bula_TH*CVD_N_bula_TH))
+
+# Cancer
+data_wide <- data_wide %>% 
+  mutate(tot_cancer_costs = (cancer_costs_bula_SH*cancer_N_bula_SH +
+                        cancer_costs_bula_HH*cancer_N_bula_HH +
+                        cancer_costs_bula_NI*cancer_N_bula_NI +
+                        cancer_costs_bula_HB*cancer_N_bula_HB +
+                        cancer_costs_bula_NW*cancer_N_bula_NW +
+                        cancer_costs_bula_HE*cancer_N_bula_HE +
+                        cancer_costs_bula_RP*cancer_N_bula_RP +
+                        cancer_costs_bula_BW*cancer_N_bula_BW +
+                        cancer_costs_bula_BY*cancer_N_bula_BY +
+                        cancer_costs_bula_SL*cancer_N_bula_SL +
+                        cancer_costs_bula_BE*cancer_N_bula_BE +
+                        cancer_costs_bula_BB*cancer_N_bula_BB +
+                        cancer_costs_bula_MV*cancer_N_bula_MV +
+                        cancer_costs_bula_SN*cancer_N_bula_SN +
+                        cancer_costs_bula_ST*cancer_N_bula_ST +
+                        cancer_costs_bula_TH*cancer_N_bula_TH))
+
+# Combine State mortality
+
+# CVD
+data_wide <- data_wide %>% 
+  mutate(tot_CVD_deaths = (CVD_deaths_bula_SH +
+                        CVD_deaths_bula_HH +
+                        CVD_deaths_bula_NI +
+                        CVD_deaths_bula_HB +
+                        CVD_deaths_bula_NW +
+                        CVD_deaths_bula_HE +
+                        CVD_deaths_bula_RP +
+                        CVD_deaths_bula_BW +
+                        CVD_deaths_bula_BY +
+                        CVD_deaths_bula_SL +
+                        CVD_deaths_bula_BE +
+                        CVD_deaths_bula_BB +
+                        CVD_deaths_bula_MV +
+                        CVD_deaths_bula_SN +
+                        CVD_deaths_bula_ST +
+                        CVD_deaths_bula_TH))
+
+# Cancer
+data_wide <- data_wide %>% 
+  mutate(tot_cancer_deaths = (cancer_deaths_bula_SH +
+                        cancer_deaths_bula_HH +
+                        cancer_deaths_bula_NI +
+                        cancer_deaths_bula_HB +
+                        cancer_deaths_bula_NW +
+                        cancer_deaths_bula_HE +
+                        cancer_deaths_bula_RP +
+                        cancer_deaths_bula_BW +
+                        cancer_deaths_bula_BY +
+                        cancer_deaths_bula_SL +
+                        cancer_deaths_bula_BE +
+                        cancer_deaths_bula_BB +
+                        cancer_deaths_bula_MV +
+                        cancer_deaths_bula_SN +
+                        cancer_deaths_bula_ST +
+                        cancer_deaths_bula_TH))
+
+# Combine population
+data_wide <- data_wide %>% 
+  mutate(tot_population = (population_bula_SH +
+                                population_bula_HH +
+                                population_bula_NI +
+                                population_bula_HB +
+                                population_bula_NW +
+                                population_bula_HE +
+                                population_bula_RP +
+                                population_bula_BW +
+                                population_bula_BY +
+                                population_bula_SL +
+                                population_bula_BE +
+                                population_bula_BB +
+                                population_bula_MV +
+                                population_bula_SN +
+                                population_bula_ST +
+                                population_bula_TH))
+
+
+data_wide <- data_wide %>%
+  select(year, gender, agegroup, tot_CVD_costs, tot_cancer_costs, tot_CVD_deaths, tot_cancer_deaths, tot_population)
+
+
+#====================================================================================================
+#                                       Generate IDs
+#====================================================================================================
+
+
+# Generate ID for gender x age  groups
+data_wide <- data_wide %>% group_by(gender, agegroup) %>% mutate(ID = cur_group_id())
+
+# summarize the variables
+#summary(data_wide[, c("ID", "year")])
+
+#class(data_wide$ID)
+#class(data_wide$year)
+
+# Recode ID to be factor
+data_wide <- data_wide %>% mutate(ID = as.factor(ID))
+#class(data_wide$ID)
+
+
+#====================================================================================================
+#                               Generate mortality and costs per capita
+#====================================================================================================
+
+# Prepare variables
+data_wide <- data_wide %>% 
+  mutate(CVD_mort = tot_CVD_deaths/tot_population) %>%
+  mutate(cancer_mort = tot_cancer_deaths/tot_population) %>%
+  mutate(CVD_costs = tot_CVD_costs/tot_population) %>%
+  mutate(cancer_costs = tot_cancer_costs/tot_population) %>%
+  mutate(log_CVD_mort = log(CVD_mort)) %>%
+  mutate(log_cancer_mort = log(cancer_mort)) %>%
+  mutate(log_CVD_costs = log(CVD_costs)) %>%
+  mutate(log_cancer_costs = log(cancer_costs))
+  
+
+
+# #====================================================================================================
+# #                           Prepare mortality data for CVD and cancer
+# #====================================================================================================
+# 
+# 
+# # Keep observations with 0 mortality by adding constant 0.00001 and drop columns not needed
+# data <- data %>%
+#   mutate(log_CVD_mort_100k = recode(log_CVD_mort_100k, "-Inf" = log(10^-5))) %>%
+#   mutate(log_cancer_mort_100k = recode(log_cancer_mort_100k, "-Inf" = log(10^-5))) %>% 
+#   select(ID, year, log_CVD_mort_100k, CVD_mort_100k, log_CVD_costs_100k, CVD_costs_100k, log_cancer_mort_100k, cancer_mort_100k, log_cancer_costs_100k, cancer_costs_100k) 
+# 
+# # Drop NAs, 2 observations dropped as cancer cost was not available, censored by DRG data holder
+# # due to number of cases below 5
+# data <- data %>%  filter(!is.na(log_CVD_costs_100k))
+# data <- data %>%  filter(!is.na(log_cancer_costs_100k))
+
+
+#====================================================================================================
+#                       Create lagged values and individual and time dummies
+#====================================================================================================
+
+
+# Setting dataset to be panel 
+#class(data_wide)
+data_wide <- pdata.frame(data_wide, index = c("ID", "year"))
+
+# xtsum panel summary
+#is.pbalanced(data_wide)
+#pdim(data_wide)
+
+# Generate lagged cost variables
+data_wide <- data_wide %>%
+  group_by(ID) %>%
+  mutate(lag_log_CVD_costs=dplyr::lag(log_CVD_costs)) %>% 
+  mutate(lag_log_cancer_costs=dplyr::lag(log_cancer_costs)) %>% 
+  mutate(lag_CVD_costs=dplyr::lag(CVD_costs)) %>% 
+  mutate(lag_cancer_costs=dplyr::lag(cancer_costs))
+
+# Generate ID dummies
+# model.matrix( ~ ID - 1, data_wide)
+# data_wide <- data.frame(data_wide, model.matrix( ~ ID - 1, data_wide))
+# 
+# 
+# # Generate year dummies
+# model.matrix( ~ year - 1, data_wide)
+# data_wide <- data.frame(data_wide, model.matrix( ~ year - 1, data_wide))
+
+
+#====================================================================================================
+#                             Manually creating first differences
+#====================================================================================================
+
+
+# Panel set data
+data_wide <- pdata.frame(data_wide, index = c("ID", "year"))
+
+
+# Mortality CVD
+data_wide <- data_wide %>% mutate(d_log_CVD_mort = diff(data_wide$log_CVD_mort))
+data_wide <- data_wide %>% mutate(d_CVD_mort = diff(data_wide$CVD_mort))
+
+# Costs CVD  
+data_wide <- data_wide %>% mutate(d_log_CVD_costs = diff(data_wide$log_CVD_costs))
+data_wide <- data_wide %>% mutate(d_CVD_costs = diff(data_wide$CVD_costs))
+
+# Lag costs CVD
+data_wide <- data_wide %>% mutate(d_lag_log_CVD_costs = diff(data_wide$lag_log_CVD_costs))
+data_wide <- data_wide %>% mutate(d_lag_CVD_costs = diff(data_wide$lag_CVD_costs))
+
+
+# Mortality cancer
+data_wide <- data_wide %>% mutate(d_log_cancer_mort = diff(data_wide$log_cancer_mort))
+data_wide <- data_wide %>% mutate(d_cancer_mort = diff(data_wide$cancer_mort))
+
+# Costs cancer  
+data_wide <- data_wide %>% mutate(d_log_cancer_costs = diff(data_wide$log_cancer_costs))
+data_wide <- data_wide %>% mutate(d_cancer_costs = diff(data_wide$cancer_costs))
+
+# Lag costs cancer
+data_wide <- data_wide %>% mutate(d_lag_log_cancer_costs = diff(data_wide$lag_log_cancer_costs))
+data_wide <- data_wide %>% mutate(d_lag_cancer_costs = diff(data_wide$lag_cancer_costs))
+
+
+#====================================================================================================
+#                             Run regression using CVD mortality and costs
+#====================================================================================================
+
+
+# Filter (region quite different, but all positive first coefficient, NW lagged negative slightly larger
+# Also tested if the same when not logging but effect persists
+# Testing if the same when just comparing two years 2009 and 2017, 2007 and 2008 needed for creating 
+# lagged variables and first differences, still one coefficient positive the other negative, with
+# the positive one being larger.
+
+#data <- data %>% 
+#  filter(year == c("2009", "2017"))
+
+# OLS model 
+m1_OLS_wide <- lm(log_CVD_mort ~ log_CVD_costs + lag_log_CVD_costs + year + ID , data = data_wide)
+#m1_OLS
+
+m1_OLS_lin_wide <- lm(CVD_mort ~ CVD_costs + lag_CVD_costs + year + ID , data = data_wide)
+#m1_OLS_lin
+
+
+# # Subset data and run with all variables
+# CVD_fd_data <- data %>% 
+#   select(d_log_CVD_mort, d_log_CVD_costs, d_lag_log_CVD_costs, ID1:ID208, year2007:year2017)
+# 
+# # First difference model on subsetted data
+# lm(d_log_CVD_mort ~ . , data = CVD_fd_data)
+
+# First difference model on full data using year and ID as factors
+# same output, different reference categories for year and ID
+m2_FD_wide <- lm(d_log_CVD_mort ~ d_log_CVD_costs + d_lag_log_CVD_costs + year + ID, data = data_wide)
+#m2_FD
+
+m2_FD_lin_wide <- lm(d_CVD_mort ~ d_CVD_costs + d_lag_CVD_costs + year + ID, data = data_wide)
+#m2_FD_lin
+
+
+rob_se_wide <- list(sqrt(diag(vcovHC(m1_OLS_wide, type = "HC0", cluster="ID"))),
+sqrt(diag(vcovHC(m2_FD_wide, type = "HC0", cluster ="ID"))))
+
+
+# OLS_se <- coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# FD_se <- coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+
+
+stargazer(m1_OLS_wide, m2_FD_wide,
+          type = "latex",
+          title = "Regression results CVD on aggregate level",
+          omit = c("year", "ID"),
+          digits = 3,
+          header = FALSE,
+          single.row = TRUE,
+          se = rob_se_wide,
+          column.labels = c("(I)", "(II)")
+          )
+
+
+#====================================================================================================
+#                             Run regression using cancer mortality and costs
+#====================================================================================================
+
+
+# OLS model 
+cancer_OLS <- lm(log_cancer_mort ~ log_cancer_costs + lag_log_cancer_costs + year + ID , data = data_wide)
+
+# First difference model on full data using year and ID as factors
+cancer_FD <- lm(d_log_cancer_mort ~ d_log_cancer_costs + d_lag_log_cancer_costs + year + ID, data = data_wide)
+
+
+rob_se <- list(sqrt(diag(vcovHC(cancer_OLS, type = "HC0", cluster ="ID"))), 
+    sqrt(diag(vcovHC(cancer_FD, type = "HC0", cluster ="ID"))))
+
+# 
+# OLS_se <- coeftest(m1_OLS, vcov = vcovHC(m1_OLS, type="HC0", cluster="ID"))
+# FD_se <- coeftest(m2_FD, vcov = vcovHC(m2_FD, type="HC0", cluster="ID"))
+
+
+stargazer(cancer_OLS, cancer_FD,
+          type = "latex",
+          title = "Regression results cancer on aggregate level",
+          omit = c("year", "ID"),
+          digits = 3,
+          se = rob_se,
+          header = F,
+          single.row = TRUE,
+          column.labels = c("(I)", "(II)")
+          )
+
+
+```
+
+# Discussion
+
+\newpage
+
+# Acknowledgements
+
+We used `r cite_r("r-references.bib")` for all our analyses.
+
+# References
+
+\begingroup
+\setlength{\parindent}{-0.5in}
+\setlength{\leftskip}{0.5in}
+
+<div id="refs" custom-style="Bibliography"></div>
+\endgroup

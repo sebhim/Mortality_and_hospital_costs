@@ -1,0 +1,14 @@
+Plenty of descriptive analyses based on clean_data.rda:
+
+03_ Contains scripts for generating graphs. Final graph scripts need to be pasted into manuscript.Rmd
+
+
+Preparation of regression models:
+
+04_prep_regression Runs baseline panel data models
+
+04_prep_regression_collapse_state_test Reshapes data and runs regression on country level
+
+
+
+The finale descriptive and regression output as shown in the manuscript.pdf is creating using manuscript.Rmd, which contains slightly altered figures and regressions

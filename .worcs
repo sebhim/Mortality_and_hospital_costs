@@ -1,0 +1,11 @@
+worcs_version: 0.1.5
+creator: sebbs
+entry_point: manuscript/manuscript.Rmd
+checksums:
+  data.csv: 2a86fd378235870c57cfa3abc7693cc4
+  shp_df.csv: 652b234af5a6d187f5f2f7816c529fe9
+data:
+  data.csv:
+    codebook: codebook_data.Rmd
+  shp_df.csv:
+    codebook: codebook_shp_df.Rmd
