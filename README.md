@@ -1,5 +1,8 @@
 # Readme <a href='https://osf.io/zcvbs/'><img src='worcs_icon.png' align="right" height="139" /></a>
 
+
+[![WORCS](https://img.shields.io/badge/WORCS-limited-orange)](https://osf.io/zcvbs/)
+
 <!-- Please add a brief introduction to explain what the project is about    -->
 
 ## Where do I start?
