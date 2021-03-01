@@ -14,3 +14,13 @@ open_data(data)
 
 load("./Data_ready/shapefile.rda")
 open_data(shp_df)
+
+
+load("./Data_ready/regression_state_level.rda")
+data_state <- data
+open_data(data_state)
+
+
+load("./Data_ready/regression_state_level_four_period.rda")
+data_state_4pm <- data
+open_data(data_state_4pm)

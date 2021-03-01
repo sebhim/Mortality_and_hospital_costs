@@ -1,0 +1,540 @@
+---
+title: "A cost-effectiveness threshold for Germany based on the marginal returns of hospital spending"
+author: Sebastian Himmler (himmler@eshpm.eur.nl)
+date: March 8, 2021
+institute: Erasmus School of Health Policy & Management
+output:
+  beamer_presentation:
+    theme: "default"
+    colortheme: "beaver"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+
+# Packages for markdown
+library("papaja")
+library("worcs")
+library("tidyverse")
+library(bannerCommenter)
+library(dplyr)
+library(gridExtra)
+library(ggplot2)
+library(RColorBrewer)
+library(grid)
+library(patchwork)
+# Packages for maps and spatial data
+library(rgdal)
+library(spdep)
+library(rgeos)
+library(maptools)
+library(sf)
+# Packges for Panel data and output
+library(ggplot2)
+library(viridis)
+library(stargazer)
+library(plm)
+library(lmtest)
+library(scales)
+
+# We recommend that you prepare your raw data for analysis in 'prepare_data.R',
+# and end that file with either open_data(yourdata), or closed_data(yourdata).
+# Then, uncomment the line below to load the original or synthetic data
+# (whichever is available), to allow anyone to reproduce your code:
+
+load_data()
+
+#load_data()
+#load("./Data_ready/clean_data.rda")
+#load("./Data_ready/regression_state_level.rda")
+
+
+#str(data)
+data <- data %>%
+  mutate(year = as.factor(year))
+
+data_wide_reg <- data
+data_long_states <- data
+data_wide_fig <- data
+r_refs("r-references.bib")
+
+```
+
+
+
+
+
+
+
+# Introduction
+
+## Motivation
+- Estimates of cost-effectiveness thresholds (or value of health in general) may help resource allocation decisions both within and outside the health care sector)
+
+$$\frac{\Delta C}{\Delta Q} < v_Q | k_Q$$
+
+- Such estiamtes can be derived based on the opportunity costs (i.e. marginal return) of health spending (Brouwer et al., 2019)
+- Focus on CVD as number one cause of death and health spending (Dornquast et al., 2016)
+
+## Literature on health opportunity costs
+
+![](EoFp_Q6UwAMfmix.jpg){#id .class width=100% height=100%}
+While Germany currently is not using CEA, information on the opportunity costs of health care spending is still relevant
+
+# Methods
+
+## Outline
+- Following approach by van Baal et al. (2019) using German data
+- Regressing mortality on spending and conducting life table calculations
+- First difference model on state aggregate level using variation across age and gender groups
+
+
+## Data sources
+
+- Hospital spending data for CVD were obtained by accessing the German DRG data
+
+- Age- and gender-group specific average hospital spending per state could be extracted for the years 2007 to 2017
+
+- Age- and gender-group specific CVD mortality data was extracted from the German mortality statistics for all 16 German states 
+
+- Life tables from the Federal Statistical Office provided information on the remaining life expectancy across age- and gender-groups. 
+
+- To approximate health related quality of life across age-groups, EQ-5D index population norms for Germany were extracted from Janssen et al. (2014)
+
+## CVD mortality and hospital spending: 2007 vs 2017
+
+```{r,  fig.cap = "Change in CVD mortality and hospital spending between 2007 and 2017", message = FALSE, echo=FALSE,results='hide',fig.keep='all', fig.align="center"} 
+# Suppress info on generating figures
+
+
+#====================================================================================================
+#                                      CVD figure
+#====================================================================================================
+
+
+
+# CVD
+mort_100k_2007_CVD <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(CVD_deaths = sum(CVD_deaths), pop = sum(population)) %>% 
+  mutate(CVD_mortality = CVD_deaths/pop)
+
+
+m2 <- mort_100k_2007_CVD %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, CVD_mortality, color = year, shape = year)) +
+  geom_point(size = 3) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("CVD mortality rate") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  theme(plot.title = element_text(size = 16, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+
+#====================================================================================================
+#                                       Cost figure
+#====================================================================================================
+
+
+# CVD
+cost_100k_2007_CVD <- data %>%
+  filter(year =="2007" | year == "2017") %>% 
+  group_by(agegroup, gender, year) %>%
+  summarise(CVD_costs_pc = sum(CVD_costs_sum)/sum(population))
+
+            
+c2 <- cost_100k_2007_CVD %>% 
+  filter((agegroup != "<1" &
+            agegroup != "1-14" &
+            agegroup != "15-19" &
+            agegroup != "20-24" &
+            agegroup != "25-29" &
+            agegroup != "30-34" &
+            agegroup != "35-39" &
+            agegroup != "40-44" &
+            agegroup != "45-49" &
+            agegroup != "50-54" &
+            agegroup != "55-59")) %>% 
+  ggplot(aes(agegroup, CVD_costs_pc, color = year, shape = year)) +
+  geom_point(size = 3) + facet_grid(.~gender) + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), axis.title = element_blank()) +
+  ggtitle("CVD spending per capita in Euro") +theme(legend.position = "none")+
+  scale_color_manual(values=c("red4", "dodgerblue4"))+
+  ylim(0,1150) +
+  theme(plot.title = element_text(size = 16, hjust = 0.5))+
+  scale_shape_manual(values=c(2, 8))
+
+CVD_fig <- m2 + c2 +
+  plot_layout(guides = "collect") &
+  theme(legend.position = "top",
+        legend.background = element_rect(fill="white", colour = "white"),
+        legend.title=element_blank(), axis.title = element_blank()
+        )
+
+CVD_fig
+
+
+```
+
+## Variation in CVD mortality changes: 2007 vs 2017
+
+```{r, fig.cap = "Regional variation in CVD mortality and cost changes from 2007 to 2017. Grey indicates mortality increases or cost decreases. Male aged 90+ not comparable.", echo=FALSE,results='hide',fig.keep='all', fig.align="center", fig.asp= 0.7}
+
+
+#====================================================================================================
+#                                       Heatmap differences regions
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       CVD mortality change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_mort_100k, CVD_costs_100k))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = CVD_mort_100k, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+data_wide_2007 <- data_wide %>%
+  subset(select = -c(y2017)) %>% 
+  filter(!is.na(y2007))
+data_wide_2017 <- data_wide %>%
+  subset(select = -c(y2007)) %>% 
+  filter(!is.na(y2017))
+
+# Merge
+data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in mortality per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_mort = y2017-y2007)
+
+# Generate change in mortality in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_mort_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+
+str(data_wide)
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+")
+
+# Graph male
+mort_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) +
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Mortality/100k") +
+  ggtitle("Male")+
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") %>% 
+  mutate(change_mort = replace(change_mort, change_mort < -3000, -3000))
+
+# Graph female
+mort_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_mort)) + 
+  scale_fill_viridis_c(limits=c(-3100, 100), breaks=seq(-3000,0,by=1000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(axis.title.x=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Mortality/100k") +
+  ggtitle("Female") +
+  xlab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#====================================================================================================
+#                                       CVD costs change
+#====================================================================================================
+
+
+# Reshape data to wide format
+
+data_wide <- data %>% 
+  subset(select = c(year, region, gender,agegroup, CVD_costs_100k))
+
+data_wide <- data_wide %>%
+  pivot_wider(names_from = year, values_from = CVD_costs_100k, names_prefix = "y")
+
+data_wide <- data_wide %>%
+  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
+  filter(!is.na(y2007) | !is.na(y2017))
+
+
+# data_wide_2007 <- data_wide %>%
+#   subset(select = -c(y2017)) %>% 
+#   filter(!is.na(y2007))
+# data_wide_2017 <- data_wide %>%
+#   subset(select = -c(y2007)) %>% 
+#   filter(!is.na(y2017))
+# 
+# # Merge
+# data_wide <- left_join(data_wide_2007, data_wide_2017, by = c("region", "gender", "agegroup"))
+
+# Generate change in costs per 100k from 2007 to 2017 per age, gender, region
+data_wide <- data_wide %>%
+  mutate(change_costs = y2017-y2007)
+
+# Generate change in costs in % (downside 0 observations are dropped)
+data_wide <- data_wide %>%
+  mutate(change_costs_percent = -1*((1-(y2017/y2007))*100))
+
+
+#====================================================================================================
+#                                       Male
+#====================================================================================================
+
+# If all age groups should be included
+
+# data_wide %>%
+#   ggplot(aes(x = agegroup, y = region)) +
+#   geom_tile(aes(fill = change_mort_percent)) +
+#   scale_fill_gradient2(limits=c(-100, 100), breaks=seq(-100,100,by=25)) 
+
+# Just include older age groups where differences are larger
+data_wide_m_old <- data_wide %>% 
+  filter(gender == "Male") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" )
+
+# Graph male
+costs_reg_m <- data_wide_m_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) +
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 43000000)) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8)) +
+  labs(fill = "Spending/100k") +
+  ggtitle("Male") +
+  xlab("")+
+  ylab("")+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 2600), breaks=seq(0,2000,by=1000)) +
+
+#====================================================================================================
+#                                      Female
+#====================================================================================================
+
+# Just include older age groups where differences are larger, censor data at -3000 for figure
+data_wide_f_old <- data_wide %>% 
+  filter(gender == "Female") %>%
+  filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+") #%>% 
+  #mutate(change_costs = replace(change_costs, change_costs < -3000, -3000))
+
+# Graph female
+costs_reg_f <- data_wide_f_old %>%
+  ggplot(aes(x = agegroup, y = factor(region, level = c("TH", "ST", "SN", "SL", "SH", "RP", "NW", "NI", "MV", "HH", "HE", "HB", "BY", "BW", "BE", "BB")))) +
+  geom_tile(aes(fill = change_costs)) + 
+  scale_fill_viridis(option = "magma", direction = -1, limits=c(0, 43000000)) +
+  theme(axis.title.y=element_blank(),
+        axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "bottom") + 
+  theme(legend.key.size = unit(0.5, "cm"), legend.text = element_text(size = 8))+
+  labs(fill = "Spending/100k") +
+  ggtitle("Female") +
+  xlab("") +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+
+
+# Combine graph
+
+mort_reg_m + mort_reg_f +
+  plot_layout(guides = "collect") & theme(legend.position = "right")
+
+
+```
+
+## Variation in CVD hospital spending: 2007 vs 2017
+
+```{r, fig.cap = "Regional variation in CVD cost changes from 2007 to 2017. Grey indicates mortality increases or cost decreases. Male aged 90+ not comparable.", echo=FALSE,results='hide',fig.keep='all', fig.align="center", fig.asp= 0.7}
+costs_reg_m + costs_reg_f +
+  plot_layout(guides = "collect") & theme(legend.position = "right")
+```
+
+## Regression model (1)
+
+First difference specification:
+$$\Delta m_i = \mu+ \alpha \Delta c_i ^t + \beta \Delta c_i ^{t-1} + \gamma_t + \tau_i + \epsilon_i$$
+$i$: Observation on Period X Agegroup X Gender X State level
+
+$\Delta m_i$: FD of CVD mortality
+
+$\Delta c_i ^t$: FD of CVD spending
+
+$\Delta c_i ^{t-1}$ FD of lag CVD spending
+
+$\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
+
+
+## First differences using all years and states
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+
+
+#====================================================================================================
+#                                       Conditioning on 60+
+#====================================================================================================
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
+data <- data_state %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" ) 
+
+#====================================================================================================
+#                                       Plotting first differences
+#====================================================================================================
+
+
+# revert to data frame for plotting
+data <- as.data.frame(data)
+
+
+# Generate histogramms and scatterplots for first differences
+scatter1 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k, y = d_CVD_mort_100k)) +
+  geom_point(aes(colour = agegroup), size = 1) +
+  geom_smooth(method = "lm")+
+  xlim(-20000000, 25000000) +
+  ylim(-3000, 2000)+
+  labs(x = "Difference in CVD spending (per 100k) compared to previous period") +
+  labs(y = "Difference in CVD mortality (per 100k) compared to previous period") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  scale_fill_viridis_c()
+
+scatter1
+```
+
+## First differences using four time periods
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+
+
+#====================================================================================================
+#                                       Conditioning on 60+
+#====================================================================================================
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
+data <- data_state_4pm %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" ) 
+
+#====================================================================================================
+#                                       Plotting first differences
+#====================================================================================================
+
+
+# revert to data frame for plotting
+data <- as.data.frame(data)
+
+
+# Generate scatterplots for first differences
+scatter1 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k, y = d_CVD_mort_100k)) +
+  geom_point(aes(colour = agegroup),size = 1) +
+  geom_smooth(method = "lm") +
+  xlim(-20000000, 25000000)+
+  ylim(-3000, 2000) +
+  labs(x = "Difference in CVD spending (per 100k) compared to previous period") +
+  labs(y = "Difference in CVD mortality (per 100k) compared to previous period") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0)
+
+scatter1
+```
+
+
+## Regression model (2)
+
+![](figures.png){#id .class width=100% height=100%}
+
+**Identifying assumption:** Time variant Variation in mortality trends that cannot be explained by period-specific and gender-specific time trends is caused by changes in medical spending.
+
+**Blind spot and implied assumption:** Variation in outpatient spending is captured by FD and included dummies
+
+## Life table calculations
+
+# Results
+
+## Regression results
+
+## k-based value of a QALY  
+
+## Robustness checks
+
+- Excuding small states (HB, HH, SL)
+
+# Discussion
+
+## Next steps & Limitations
+- Simple linear model (alternative models and specifications/transformation?) 
+- Noise in the data was "remedied" by dropping yearly variation (good idea?)
+- Outpatient spending was not included (ideas on state aggregate data per age/gender group?)
+- So far only CVD, will be extended to cancer
+
+## Conclusion
+
+![](fog.jpg){#id .class width=100% height=100%}
+
+## Conclusion
+
+![](fog2.jpg){#id .class width=100% height=100%}
+Github: 
+E-mail: himmler@eshpm.eur.nl
+Website: sebastian.himmler.com
+Twitter: @Sebastian_Him

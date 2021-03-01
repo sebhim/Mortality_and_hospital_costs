@@ -4,3 +4,13 @@
 # to store the data.
 
 library(worcs)
+library(tidyverse)
+
+
+
+load("./Data_ready/clean_data.rda")
+open_data(data)
+
+
+load("./Data_ready/shapefile.rda")
+open_data(shp_df)

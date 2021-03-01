@@ -2,10 +2,16 @@ worcs_version: 0.1.5
 creator: sebbs
 entry_point: manuscript/manuscript.Rmd
 checksums:
-  data.csv: 2a86fd378235870c57cfa3abc7693cc4
+  data.csv: 63ae39297c4943ea7c9ecdb063ba44ae
   shp_df.csv: 652b234af5a6d187f5f2f7816c529fe9
+  data_state.csv: 75f775ddb79bc44820e1c361c996b85b
+  data_state_4pm.csv: fa7cea3d66a6030b39b5511f222155b2
 data:
   data.csv:
     codebook: codebook_data.Rmd
   shp_df.csv:
     codebook: codebook_shp_df.Rmd
+  data_state.csv:
+    codebook: codebook_data_state.Rmd
+  data_state_4pm.csv:
+    codebook: codebook_data_state_4pm.Rmd

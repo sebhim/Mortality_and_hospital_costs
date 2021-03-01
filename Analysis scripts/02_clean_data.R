@@ -10,15 +10,10 @@
 #====================================================================================================
 
 
-# banner("This text", emph = TRUE, bandChar = "=", leftSideHashes = 1, rightSideHashes = 0, minHashes = 100)
-
-
 #====================================================================================================
 #                                       Load R packages and data                                          
 #====================================================================================================
 
-
-# banner("This text", bandChar = "=", leftSideHashes = 1, rightSideHashes = 0, minHashes = 100, center = TRUE)
 
 library(bannerCommenter)
 library(tidyverse)
@@ -33,9 +28,6 @@ library(spdep)
 library(rgeos)
 library(maptools)
 library(sf)
-
-
-
 
 load("./Data_ready/full_analysis_data.rda")
 
@@ -112,12 +104,13 @@ data <- data %>%
                          '17' = "85-89",
                          '18' = "90+"))
 
+
 #====================================================================================================
-#                                       Missing data
+#               Missing data for costs only occurring in agegroups below 60
 #====================================================================================================
 
 
-# Instances with less then 3 observations per cell were anonymised by the FDZ using X
+# Instances with less then 3 observations per cell were anonymised by the data holder using X
 # Only occuring for cancer and CVD
 ind1 <- is.na(data$cancer_costs) # logical TRUE/FALSE vector
 ind2 <- is.na(data$cancer_N) # logical TRUE/FALSE vector
@@ -145,48 +138,84 @@ sum(ind2)
 
 
 #====================================================================================================
-#                             Generate values per 100,000 population
+#                             Generate cost values per 100,000 population
 #====================================================================================================
 
   
 # Population variable based on calculation from mortality statitics which had cases per 100,000 and 
 # the total number of cases
 
+# Cost per 100,000
 data <- data %>%
-  mutate(tot_costs_100k = (tot_costs/population)*100000,
-         CVD_costs_100k = (CVD_costs/population)*100000,
-         cancer_costs_100k = (cancer_costs/population)*100000,
-         resp_costs_100k = (resp_costs/population)*100000)
+  mutate(overall_costs_100k = ((tot_costs*tot_N)/population)*100000,
+         CVD_costs_100k = ((CVD_costs*CVD_N)/population)*100000,
+         cancer_costs_100k = ((cancer_costs*cancer_N)/population)*100000,
+         resp_costs_100k = ((resp_costs*resp_N)/population)*100000)
 
-
+# Hospital cases per 100,000
 data <- data %>%
-  mutate(tot_N_100k = (tot_N/population)*100000,
-         CVD_N_100k = (CVD_N/population)*100000,
-         cancer_N_100k = (cancer_N/population)*100000,
-         resp_N_100k = (resp_N/population)*100000)
+  mutate(overall_hospcases_100k = (tot_N/population)*100000,
+         CVD_hospcases_100k = (CVD_N/population)*100000,
+         cancer_hospcases_100k = (cancer_N/population)*100000,
+         resp_hospcases_100k = (resp_N/population)*100000)
       
+# Rename average costs per hospital case
+data <- data %>%
+  rename(overall_avg_cost_case = tot_costs,
+         CVD_avg_cost_case = CVD_costs,
+         cancer_avg_cost_case = cancer_costs,
+         resp_avg_cost_case = resp_costs)
+
+# Rename tot_ columns
+data <- data %>%
+  rename(overall_deaths = tot_deaths,
+         overall_mort_100k = tot_mort_100k,
+         overall_N = tot_N)
 
 #====================================================================================================
 #                               Generate log costs and mortality
 #====================================================================================================
 
 
+# Observations with zero mortality will be kept but not used in base case log specification
+# In alternative specification could add very small number to still use them
+# Only occur in agegroups below 60
+
+# Generate logs
 data <- data %>%
-  mutate(log_tot_costs_100k = log(tot_costs_100k),
+  mutate(log_overall_costs_100k = log(overall_costs_100k),
          log_CVD_costs_100k = log(CVD_costs_100k),
          log_cancer_costs_100k = log(cancer_costs_100k),
          log_resp_costs_100k = log(resp_costs_100k),
-         log_tot_mort_100k = log(tot_mort_100k),
+         log_overall_mort_100k = log(overall_mort_100k),
          log_CVD_mort_100k = log(CVD_mort_100k),
          log_cancer_mort_100k = log(cancer_mort_100k),
          log_resp_mort_100k = log(resp_mort_100k))
 
-# Total costs
+# Replace -Inf by na
 data <- data %>%
-  mutate(total_costs_sum = tot_costs*tot_N,
-         CVD_costs_sum = CVD_costs*CVD_N,
-         cancer_costs_sum = cancer_costs*cancer_N,
-         resp_costs_sum = resp_costs*resp_N)
+  mutate_if(is.numeric, list(~na_if(., Inf))) %>% 
+  mutate_if(is.numeric, list(~na_if(., -Inf)))
+
+
+# Generating total costs variable
+data <- data %>%
+  mutate(overall_costs_sum = overall_avg_cost_case*overall_N,
+         CVD_costs_sum = CVD_avg_cost_case*CVD_N,
+         cancer_costs_sum = cancer_avg_cost_case*cancer_N,
+         resp_costs_sum = resp_avg_cost_case*resp_N)
+
+#====================================================================================================
+#                                      Dropping males 90+
+#====================================================================================================
+
+
+# Drop 90+ men before 2011 due to comparability issues (after 2011 based on widely different population size estimate)
+# https://www.destatis.de/DE/Methoden/WISTA-Wirtschaft-und-Statistik/2015/04/ermittlung-einwohnerzahlen-042015.pdf?__blob=publicationFile
+
+data <- data %>%
+  filter(!(agegroup =="90+" & gender =="Male")) 
+
 
 #====================================================================================================
 #                               Save data
@@ -194,7 +223,6 @@ data <- data %>%
 
 
 # Reorder columns
-
 colnames(data)
 data <- data[,c(21, 1:20,22:41)] # order columns
 
@@ -204,38 +232,7 @@ save(data, file = "./Data_ready/clean_data.rda")
 
 
 #====================================================================================================
-#                               Combine regions into super-regions (Nielsen regions)
-# Rationale is size of regions very different, but treated the same in regression (without weights)
-# At the same time, very low number of observations for smaller regions
-#====================================================================================================
-
-
-
-# Reshape data to wide format
-
-data_wide <- data %>% 
-  subset(select = c(year, region, gender,agegroup, CVD_costs))
-
-data_wide <- data_wide %>%
-  pivot_wider(names_from = year, values_from = CVD_costs, names_prefix = "y")
-
-data_wide <- data_wide %>%
-  subset(select = c(region, gender,agegroup, y2007, y2017)) %>%
-  filter(!is.na(y2007) | !is.na(y2017))
-
-
-
-
-
-
-
-
-
-
-
-
-#====================================================================================================
-#                               Load shapefile
+#                               Load shapefile for graphical analysis
 #====================================================================================================
 
 
@@ -243,7 +240,6 @@ data_wide <- data_wide %>%
 # https://rstudio-pubs-static.s3.amazonaws.com/280176_81148aa4c2024d6ca6e9d21598a3e41f.html
 
 # Recode state names
-
 shp <- readOGR(dsn = "./Data_ready/Shapefile",layer = "DEU_adm1") # , stringsAsFactors = F) am ende
 
 shp@data <- shp@data %>% mutate(NAME_1 = recode(NAME_1,

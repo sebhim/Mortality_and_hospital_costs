@@ -1,5 +1,5 @@
 ---
-title: "Codebook created on 2021-03-01 at 2021-03-01 10:30:43"
+title: "Codebook created on 2021-03-01 at 2021-03-01 10:30:49"
 output: github_document
 ---
 
@@ -8,12 +8,12 @@ knitr::opts_chunk$set(echo = FALSE, results = 'asis')
 ```
 
 ## Dataset description
-The data contains 6160 cases and 42 variables.
+The data contains 2240 cases and 30 variables.
 
 ## Codebook
 
 ```{r}
-summaries <- read.csv("./codebook_data.csv", stringsAsFactors = FALSE)
+summaries <- read.csv("./codebook_data_state_4pm.csv", stringsAsFactors = FALSE)
 summaries <- summaries[, !colSums(is.na(summaries)) == nrow(summaries)]
 options(knitr.kable.NA = '')
 knitr::kable(summaries, row.names = FALSE, digits = 2)
