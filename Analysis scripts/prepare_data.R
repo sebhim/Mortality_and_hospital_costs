@@ -26,3 +26,4 @@ data_state_4pm <- data
 open_data(data_state_4pm)
 
 load("./Data_ready/regression_state_agecollapse.rda")
+data_agecollapse_all <- data_agecollapse

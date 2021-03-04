@@ -425,16 +425,7 @@ $\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
 
 ```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
 
-#====================================================================================================
-#====================================================================================================
-#                                                                                                   
-# Outline:  Regression analysis using all states and time periods with collapsed agegroups                                       
-#
-# Input:    regression_state_agecollapse.rda
-# Output:   Table XX
-#
-#====================================================================================================
-#====================================================================================================
+# Age collapse
 
 
 #====================================================================================================
@@ -443,7 +434,7 @@ $\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
 
 
 # Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
-data <- data_agecollapse %>%
+data <- data %>%
   filter(agegroup =="6" | agegroup == "7" | agegroup =="8" | agegroup =="9") %>% 
   filter(!(agegroup == "9" & gender =="Male"))
 
