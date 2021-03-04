@@ -62,8 +62,8 @@ class(data$ID)
 
 data <- data %>% 
   select(ID, year, region, gender, agegroup,  population,
-         log_CVD_mort_100k, CVD_mort_100k, log_CVD_costs_100k, CVD_costs_100k, 
-         log_cancer_mort_100k, cancer_mort_100k, log_cancer_costs_100k, cancer_costs_100k) 
+         log_CVD_mort_100k, CVD_mort_100k, log_CVD_costs_100k, CVD_costs_100k, CVD_costs_sum, CVD_deaths,
+         log_cancer_mort_100k, cancer_mort_100k, log_cancer_costs_100k, cancer_costs_100k, cancer_costs_sum, cancer_deaths) 
   
 
 #====================================================================================================
@@ -117,7 +117,7 @@ data <- data %>%
 # data <- data.frame(data, model.matrix( ~ year - 1, data))
 
 data_4pm <- data
-
+data_3pm <- data
 
 #====================================================================================================
 #                 Creating first differences for mortality, costs and lagged costs
@@ -172,6 +172,7 @@ save(data, file = "./Data_ready/regression_state_level.rda")
 
 
 
+
 #====================================================================================================
 #====================================================================================================
 #                                                                                                   
@@ -185,6 +186,7 @@ save(data, file = "./Data_ready/regression_state_level.rda")
 
 
 data <- data_4pm
+
 
 
 #====================================================================================================
@@ -226,6 +228,14 @@ data <- data %>% mutate(d_CVD_costs_100k = diff(data$CVD_costs_100k))
 data <- data %>% mutate(d_lag_log_CVD_costs_100k = diff(data$lag_log_CVD_costs_100k))
 data <- data %>% mutate(d_lag_CVD_costs_100k = diff(data$lag_CVD_costs_100k))
 
+# CVD costs squared
+data <- data %>% mutate(CVD_costs_100k_sq = CVD_costs_100k^2)
+data <- data %>% mutate(d_CVD_costs_100k_sq = diff(data$CVD_costs_100k_sq))
+
+data <- data %>% mutate(lag_CVD_costs_100k_sq = lag_CVD_costs_100k^2)
+data <- data %>% mutate(d_lag_CVD_costs_100k_sq = diff(data$lag_CVD_costs_100k_sq))
+
+
 
 # Mortality cancer
 data <- data %>% mutate(d_log_cancer_mort_100k = diff(data$log_cancer_mort_100k))
@@ -241,6 +251,112 @@ data <- data %>% mutate(d_lag_cancer_costs_100k = diff(data$lag_cancer_costs_100
 
 
 #====================================================================================================
+#                             Manually creating first differences per capita
+#====================================================================================================
+
+# Mortality CVD pc
+data <- data %>% mutate(d_log_CVD_mort_pc = diff(log(data$CVD_mort_100k/100000)))
+
+# Costs CVD  pc
+data <- data %>% mutate(d_log_CVD_costs_pc = diff(log(data$CVD_costs_100k/100000)))
+
+# Produces same results when not per 100,000 but per capita for log first differences
+
+#====================================================================================================
+#                               Save data
+#====================================================================================================
+
+
+# Remove variables not needed for regression analysis
+data <- data %>% 
+  select(ID, year, gender, agegroup, region, population,
+         d_log_CVD_mort_100k, log_CVD_mort_100k, d_CVD_mort_100k, CVD_mort_100k, CVD_deaths,
+         d_log_CVD_costs_100k, log_CVD_costs_100k, d_CVD_costs_100k, CVD_costs_100k, CVD_costs_100k_sq, d_CVD_costs_100k_sq, CVD_costs_sum,
+         d_lag_log_CVD_costs_100k, lag_log_CVD_costs_100k, d_lag_CVD_costs_100k, lag_CVD_costs_100k, lag_CVD_costs_100k_sq, d_lag_CVD_costs_100k_sq,
+         d_log_cancer_mort_100k, log_cancer_mort_100k, d_cancer_mort_100k, cancer_mort_100k,
+         d_log_cancer_costs_100k, log_cancer_costs_100k, d_cancer_costs_100k, cancer_costs_100k, cancer_costs_sum, cancer_deaths,
+         d_lag_log_cancer_costs_100k, lag_log_cancer_costs_100k, d_lag_cancer_costs_100k, lag_cancer_costs_100k) 
+
+save(data, file = "./Data_ready/regression_state_level_four_period.rda")
+
+
+
+#====================================================================================================
+#====================================================================================================
+#                                                                                                   
+# Outline:  Prepare data for regression analysis using data on state level but only four time periods                                    
+#
+# Input:    data_3pm
+# Output:   regression_state_level_three_period.rda
+#
+#====================================================================================================
+#====================================================================================================
+
+
+data <- data_3pm
+
+
+
+#====================================================================================================
+#                             Condition on three periods and recode
+#====================================================================================================
+
+class(data)
+data <- data %>% 
+  filter(year == "2008" | year == "2012" | year == "2017")
+
+class(data$year)
+
+data <- data %>% 
+  mutate(year = recode(year,
+                       "2008" = "1",
+                       "2012" = "2",
+                       "2017" = "3"))
+
+
+#====================================================================================================
+#                             Manually creating first differences
+#====================================================================================================
+
+
+# Panel set data frame
+data <- pdata.frame(data, index = c("ID", "year"))
+
+
+# Mortality CVD
+data <- data %>% mutate(d_log_CVD_mort_100k = diff(data$log_CVD_mort_100k))
+data <- data %>% mutate(d_CVD_mort_100k = diff(data$CVD_mort_100k))
+
+# Costs CVD  
+data <- data %>% mutate(d_log_CVD_costs_100k = diff(data$log_CVD_costs_100k))
+data <- data %>% mutate(d_CVD_costs_100k = diff(data$CVD_costs_100k))
+
+# Lag costs CVD
+data <- data %>% mutate(d_lag_log_CVD_costs_100k = diff(data$lag_log_CVD_costs_100k))
+data <- data %>% mutate(d_lag_CVD_costs_100k = diff(data$lag_CVD_costs_100k))
+
+# CVD costs squared
+data <- data %>% mutate(CVD_costs_100k_sq = CVD_costs_100k^2)
+data <- data %>% mutate(d_CVD_costs_100k_sq = diff(data$CVD_costs_100k_sq))
+
+data <- data %>% mutate(lag_CVD_costs_100k_sq = lag_CVD_costs_100k^2)
+data <- data %>% mutate(d_lag_CVD_costs_100k_sq = diff(data$lag_CVD_costs_100k_sq))
+
+
+
+# Mortality cancer
+data <- data %>% mutate(d_log_cancer_mort_100k = diff(data$log_cancer_mort_100k))
+data <- data %>% mutate(d_cancer_mort_100k = diff(data$cancer_mort_100k))
+
+# Costs cancer  
+data <- data %>% mutate(d_log_cancer_costs_100k = diff(data$log_cancer_costs_100k))
+data <- data %>% mutate(d_cancer_costs_100k = diff(data$cancer_costs_100k))
+
+# Lag costs cancer
+data <- data %>% mutate(d_lag_log_cancer_costs_100k = diff(data$lag_log_cancer_costs_100k))
+data <- data %>% mutate(d_lag_cancer_costs_100k = diff(data$lag_cancer_costs_100k))
+
+#====================================================================================================
 #                               Save data
 #====================================================================================================
 
@@ -249,16 +365,13 @@ data <- data %>% mutate(d_lag_cancer_costs_100k = diff(data$lag_cancer_costs_100
 data <- data %>% 
   select(ID, year, gender, agegroup, region, population,
          d_log_CVD_mort_100k, log_CVD_mort_100k, d_CVD_mort_100k, CVD_mort_100k,
-         d_log_CVD_costs_100k, log_CVD_costs_100k, d_CVD_costs_100k, CVD_costs_100k,
-         d_lag_log_CVD_costs_100k, lag_log_CVD_costs_100k, d_lag_CVD_costs_100k, lag_CVD_costs_100k,
+         d_log_CVD_costs_100k, log_CVD_costs_100k, d_CVD_costs_100k, CVD_costs_100k, CVD_costs_100k_sq, d_CVD_costs_100k_sq,
+         d_lag_log_CVD_costs_100k, lag_log_CVD_costs_100k, d_lag_CVD_costs_100k, lag_CVD_costs_100k, lag_CVD_costs_100k_sq, d_lag_CVD_costs_100k_sq,
          d_log_cancer_mort_100k, log_cancer_mort_100k, d_cancer_mort_100k, cancer_mort_100k,
          d_log_cancer_costs_100k, log_cancer_costs_100k, d_cancer_costs_100k, cancer_costs_100k,
          d_lag_log_cancer_costs_100k, lag_log_cancer_costs_100k, d_lag_cancer_costs_100k, lag_cancer_costs_100k) 
 
-save(data, file = "./Data_ready/regression_state_level_four_period.rda")
-
-
-
+save(data, file = "./Data_ready/regression_state_level_three_period.rda")
 
 
 

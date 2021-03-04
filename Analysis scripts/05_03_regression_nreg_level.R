@@ -149,6 +149,35 @@ states_cancer_lin
 states_cancer_log
 
 
+#====================================================================================================
+#                                               Final FD model
+#====================================================================================================
+
+
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data)
+summary(CVD_reg)
+
+coeftest(CVD_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(CVD_lin)
+
+#====================================================================================================
+#                                               Final cancer FD model
+#====================================================================================================
+
+
+cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
+summary(cancer_reg)
+
+coeftest(cancer_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(cancer_reg)
+vif(cancer_reg)
+
+
+
 
 #====================================================================================================
 #====================================================================================================
@@ -254,6 +283,8 @@ CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = 
 cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k, data = data)
 
 coeftest(CVD_lin)
+coeftest(cancer_lin)
+
 summary(CVD_lin)
 
 
@@ -348,7 +379,8 @@ summary(CVD_lin)
 CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k, data = data)
 
 # Cancer regressions
-cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k, data = data)
+cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + gender + year, data = data)
+summary(cancer_lin)
 cancer_log <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k, data = data)
 
 
@@ -366,6 +398,32 @@ nreg_CVD_log_4pm
 nreg_cancer_lin_4pm
 nreg_cancer_log_4pm
 
+#====================================================================================================
+#                                               Final FD model
+#====================================================================================================
+
+
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data)
+summary(CVD_reg)
+
+coeftest(CVD_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(CVD_lin)
+
+#====================================================================================================
+#                                               Final cancer FD model
+#====================================================================================================
+
+
+cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
+summary(cancer_reg)
+
+coeftest(cancer_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(cancer_reg)
+vif(cancer_reg)
 
 
 
@@ -474,7 +532,8 @@ coeftest(CVD_lin)
 summary(CVD_lin)
 
 cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k, data = data)
-
+coeftest(cancer_lin)
+summary(cancer_lin)
 # Regression diagnositcs
 par(mfrow=c(2,2))
 plot(CVD_lin)
@@ -509,7 +568,7 @@ summary(CVD_lin)
 CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k, data = data)
 summary(CVD_log)
 
-cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k, data = data)
+cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
 summary(cancer_lin)
 cancer_log <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k, data = data)
 summary(cancer_log)
@@ -536,12 +595,14 @@ summary(cancer_log)
 
 
 # CVD regressions
-CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year, data = data)
+CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data)
 summary(CVD_lin)
 CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k, data = data)
 
 # Cancer regressions
-cancer_lin <- lm(d_log_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k, data = data)
+cancer_lin <- lm(d_log_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
+summary(cancer_lin)
+
 cancer_log <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k, data = data)
 
 
@@ -560,6 +621,32 @@ nreg_CVD_log_3pm
 nreg_cancer_log_3pm
 
 
+#====================================================================================================
+#                                               Final FD model
+#====================================================================================================
+
+
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data)
+summary(CVD_reg)
+
+coeftest(CVD_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(CVD_lin)
+
+#====================================================================================================
+#                                               Final cancer FD model
+#====================================================================================================
+
+
+cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
+summary(cancer_reg)
+
+coeftest(cancer_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(cancer_reg)
+vif(cancer_reg)
 
 
 
@@ -647,98 +734,123 @@ scatter2 <- data %>%
 grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
 
 
-
-
-
-
 #====================================================================================================
-#                             Run regression using CVD mortality and costs
+#                                               Final CVD FD model
 #====================================================================================================
 
-# When using population weights
-# https://stackoverflow.com/questions/18260017/how-to-set-a-weighted-least-squares-in-r-for-heteroscedastic-data
-# after data: weights = 1/data$population)
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + gender, data = data, weights = population_y2012)
+summary(CVD_reg)
 
+coeftest(CVD_reg, vcov. = vcovHC, type = "HC1")
 
-#====================================================================================================
-#                                   Testing for multicolinearity
-#====================================================================================================
-
-# CVD regressions
-CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = data)
-coeftest(CVD_lin)
-summary(CVD_lin)
-
-
-# Regression diagnositcs
 par(mfrow=c(2,2))
-plot(CVD_lin)
-
-# Test for multicolinearity
-omcdiag(CVD_lin)
-vif(CVD_lin)
-# Farrar Glauber test
-imcdiag(CVD_lin)
-
-# Lag and d_costs are multicolinear
-
-# Plotting lag
-
-scatter_lag_CVD <- data %>%
-  ggplot(data = data, mapping = aes(x = d_lag_CVD_costs_100k, y = d_CVD_mort_100k)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-scatter_lag_CVD
-
-scatter_lag_CVD_nolag <- data %>%
-  ggplot(data = data, mapping = aes(x = d_lag_CVD_costs_100k, y = d_CVD_costs_100k)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-scatter_lag_CVD_nolag
-
-
-scatter_lag_cancer <- data %>%
-  ggplot(data = data, mapping = aes(x = d_lag_cancer_costs_100k, y = d_cancer_mort_100k)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-scatter_lag_cancer
-
-
+plot(CVD_reg)
+vif(CVD_reg)
 
 #====================================================================================================
-#                                           Models
+#                                               Final cancer FD model
 #====================================================================================================
 
+cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + gender, data = data, weights = population_y2012)
+summary(cancer_reg)
+
+coeftest(cancer_reg, vcov. = vcovHC, type = "HC1")
+
+par(mfrow=c(2,2))
+plot(cancer_reg)
+vif(cancer_reg)
 
 
-
-CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = data)
-coeftest(CVD_lin)
-
-
-
-CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + ID , data = data)
-coeftest(CVD_lin_ID)
-
-CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k, data = data)
-coeftest(CVD_log) 
-CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k + ID , data = data)
-coeftest(CVD_log_ID)
-
-# Cancer regressions
-cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + ID , data = data)
-cancer_log <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k + ID , data = data)
-
-# Creating regression output
-nreg_CVD_lin_tpm <- coeftest(CVD_lin, vcov = vcovHC(CVD_lin, type="HC0", cluster="ID"))
-nreg_CVD_log_tpm <- coeftest(CVD_log, vcov = vcovHC(CVD_log, type="HC0", cluster="ID"))
-
-nreg_cancer_lin_tpm <- coeftest(cancer_lin, vcov = vcovHC(cancer_lin, type="HC0", cluster="ID"))
-nreg_cancer_log_tpm <- coeftest(cancer_log, vcov = vcovHC(cancer_log, type="HC0", cluster="ID"))
-
-
-nreg_CVD_lin_tpm
-nreg_CVD_log_tpm
-
-nreg_cancer_lin_tpm
-nreg_cancer_log_tpm
+# 
+# 
+# #====================================================================================================
+# #                             Run regression using CVD mortality and costs
+# #====================================================================================================
+# 
+# # When using population weights
+# # https://stackoverflow.com/questions/18260017/how-to-set-a-weighted-least-squares-in-r-for-heteroscedastic-data
+# # after data: weights = 1/data$population)
+# 
+# 
+# #====================================================================================================
+# #                                   Testing for multicolinearity
+# #====================================================================================================
+# 
+# # CVD regressions
+# CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = data)
+# coeftest(CVD_lin)
+# summary(CVD_lin)
+# 
+# 
+# # Regression diagnositcs
+# par(mfrow=c(2,2))
+# plot(CVD_lin)
+# 
+# # Test for multicolinearity
+# omcdiag(CVD_lin)
+# vif(CVD_lin)
+# # Farrar Glauber test
+# imcdiag(CVD_lin)
+# 
+# # Lag and d_costs are multicolinear
+# 
+# # Plotting lag
+# 
+# scatter_lag_CVD <- data %>%
+#   ggplot(data = data, mapping = aes(x = d_lag_CVD_costs_100k, y = d_CVD_mort_100k)) +
+#   geom_point() +
+#   geom_smooth(method = "lm")
+# scatter_lag_CVD
+# 
+# scatter_lag_CVD_nolag <- data %>%
+#   ggplot(data = data, mapping = aes(x = d_lag_CVD_costs_100k, y = d_CVD_costs_100k)) +
+#   geom_point() +
+#   geom_smooth(method = "lm")
+# scatter_lag_CVD_nolag
+# 
+# 
+# scatter_lag_cancer <- data %>%
+#   ggplot(data = data, mapping = aes(x = d_lag_cancer_costs_100k, y = d_cancer_mort_100k)) +
+#   geom_point() +
+#   geom_smooth(method = "lm")
+# scatter_lag_cancer
+# 
+# 
+# 
+# #====================================================================================================
+# #                                           Models
+# #====================================================================================================
+# 
+# 
+# 
+# 
+# CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = data)
+# coeftest(CVD_lin)
+# 
+# 
+# 
+# CVD_lin <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + ID , data = data)
+# coeftest(CVD_lin_ID)
+# 
+# CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k, data = data)
+# coeftest(CVD_log) 
+# CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k + ID , data = data)
+# coeftest(CVD_log_ID)
+# 
+# # Cancer regressions
+# cancer_lin <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + ID , data = data)
+# cancer_log <- lm(d_log_cancer_mort_100k ~ d_log_cancer_costs_100k + d_lag_log_cancer_costs_100k + ID , data = data)
+# 
+# # Creating regression output
+# nreg_CVD_lin_tpm <- coeftest(CVD_lin, vcov = vcovHC(CVD_lin, type="HC0", cluster="ID"))
+# nreg_CVD_log_tpm <- coeftest(CVD_log, vcov = vcovHC(CVD_log, type="HC0", cluster="ID"))
+# 
+# nreg_cancer_lin_tpm <- coeftest(cancer_lin, vcov = vcovHC(cancer_lin, type="HC0", cluster="ID"))
+# nreg_cancer_log_tpm <- coeftest(cancer_log, vcov = vcovHC(cancer_log, type="HC0", cluster="ID"))
+# 
+# 
+# nreg_CVD_lin_tpm
+# nreg_CVD_log_tpm
+# 
+# nreg_cancer_lin_tpm
+# nreg_cancer_log_tpm

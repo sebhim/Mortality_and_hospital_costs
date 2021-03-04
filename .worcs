@@ -5,7 +5,7 @@ checksums:
   data.csv: 63ae39297c4943ea7c9ecdb063ba44ae
   shp_df.csv: 652b234af5a6d187f5f2f7816c529fe9
   data_state.csv: 75f775ddb79bc44820e1c361c996b85b
-  data_state_4pm.csv: fa7cea3d66a6030b39b5511f222155b2
+  data_state_4pm.csv: 96ea557205752fca73663c638ee280bb
 data:
   data.csv:
     codebook: codebook_data.Rmd

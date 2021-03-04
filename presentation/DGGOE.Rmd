@@ -1,6 +1,8 @@
 ---
 title: "A cost-effectiveness threshold for Germany based on the marginal returns of hospital spending"
-author: Sebastian Himmler (himmler@eshpm.eur.nl)
+author: | 
+  | Sebastian Himmler (himmler@eshpm.eur.nl)
+  | https://github.com/sebhim/Mortality_and_hospital_costs
 date: March 8, 2021
 institute: Erasmus School of Health Policy & Management
 output:
@@ -74,7 +76,7 @@ r_refs("r-references.bib")
 $$\frac{\Delta C}{\Delta Q} < v_Q | k_Q$$
 
 - Such estiamtes can be derived based on the opportunity costs (i.e. marginal return) of health spending (Brouwer et al., 2019)
-- Focus on CVD as number one cause of death and health spending (Dornquast et al., 2016)
+- Objective is to do just that for Germany, focusing on CVD as number one cause of death and health spending (Dornquast et al., 2016)
 
 ## Literature on health opportunity costs
 
@@ -87,7 +89,6 @@ While Germany currently is not using CEA, information on the opportunity costs o
 - Following approach by van Baal et al. (2019) using German data
 - Regressing mortality on spending and conducting life table calculations
 - First difference model on state aggregate level using variation across age and gender groups
-
 
 ## Data sources
 
@@ -420,6 +421,304 @@ $\Delta c_i ^{t-1}$ FD of lag CVD spending
 
 $\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
 
+## Temporal variation in CVD mortality across states
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+#====================================================================================================
+#====================================================================================================
+#                                                                                                   
+# Outline:  Regression analysis using all states and time periods with collapsed agegroups                                       
+#
+# Input:    regression_state_agecollapse.rda
+# Output:   Table XX
+#
+#====================================================================================================
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       Conditioning on 60+
+#====================================================================================================
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
+data <- data_agecollapse %>%
+  filter(agegroup =="6" | agegroup == "7" | agegroup =="8" | agegroup =="9") %>% 
+  filter(!(agegroup == "9" & gender =="Male"))
+
+#====================================================================================================
+#                                       Plotting first differences
+#====================================================================================================
+
+
+# revert to data frame for plotting
+data <- as.data.frame(data)
+
+
+# Generate histogramms and scatterplots for first differences
+hist1 <- data %>% 
+  filter(d_CVD_mort_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_mort_100k)) +
+  geom_histogram() +
+  xlim(-200, 200) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist2 <- data %>% 
+  filter(d_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k)) +
+  geom_histogram() +
+  xlim(-5e+06,5e+06) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist3 <- data %>% 
+  filter(d_log_CVD_mort_100k != is.na) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_mort_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist4 <- data %>% 
+  filter(d_log_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+scatter1 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k, y = d_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+scatter2 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k, y = d_log_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm")
+
+
+# Combine plot
+#grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
+
+
+#====================================================================================================
+#                                       Plotting temporal variation in mortality
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       Rescaling mortality to 100% - lags
+#====================================================================================================
+
+
+#class(data)
+
+data <- pdata.frame(data, index = c("ID", "year"))
+
+# Graph with base 2007
+data <- data %>%
+  mutate(CVD_mort_100k_base2007 = 0)
+
+data <- data %>% 
+  mutate(CVD_mort_100k_base2007 = if_else(year == 2007, 1, CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2008, CVD_mort_100k/(lag(CVD_mort_100k)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2009, CVD_mort_100k/(lag(CVD_mort_100k, n = 2)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2010, CVD_mort_100k/(lag(CVD_mort_100k, n = 3)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2011, CVD_mort_100k/(lag(CVD_mort_100k, n = 4)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2012, CVD_mort_100k/(lag(CVD_mort_100k, n = 5)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2013, CVD_mort_100k/(lag(CVD_mort_100k, n = 6)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2014, CVD_mort_100k/(lag(CVD_mort_100k, n = 7)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2015, CVD_mort_100k/(lag(CVD_mort_100k, n = 8)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2016, CVD_mort_100k/(lag(CVD_mort_100k, n = 9)), CVD_mort_100k_base2007),
+         CVD_mort_100k_base2007 = if_else(year == 2017, CVD_mort_100k/(lag(CVD_mort_100k, n = 10)), CVD_mort_100k_base2007),
+         )
+
+# Male
+line_plot_base2007_male <- data %>%
+  filter(gender == "Male") %>% 
+  ggplot(aes(x = year, y = CVD_mort_100k_base2007, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "") +
+  labs(y = "%-Difference in CVD mortality compared to 2007") +
+  geom_hline(yintercept = 1)
+
+#line_plot_base2007_male
+
+# Female
+line_plot_base2007_female <- data %>%
+  filter(gender == "Female") %>% 
+  ggplot(aes(x = year, y = CVD_mort_100k_base2007, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference in CVD mortality compared to 2007") +
+  geom_hline(yintercept = 1)
+
+line_plot_base2007_female
+
+
+
+# Graph with percentage change compared to previous year
+data <- data %>%
+  mutate(CVD_mort_100k_percent = 0)
+
+data <- data %>% 
+  mutate(CVD_mort_100k_percent = if_else(year == 2007, 0, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2008, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2009, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2010, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2011, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2012, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2013, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2014, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2015, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2016, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+         CVD_mort_100k_percent = if_else(year == 2017, (CVD_mort_100k/(lag(CVD_mort_100k)))-1, CVD_mort_100k_percent),
+  )
+
+# Male
+line_plot_percent_male <- data %>%
+  filter(gender == "Male") %>% 
+  ggplot(aes(x = year, y = CVD_mort_100k_percent, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference compared to previous year") +
+  geom_hline(yintercept = 0)
+
+#line_plot_percent_male
+
+# Female
+line_plot_percent_female <- data %>%
+  filter(gender == "Female") %>% 
+  ggplot(aes(x = year, y = CVD_mort_100k_percent, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference compared to previous year") +
+  geom_hline(yintercept = 0)
+
+
+
+
+
+#====================================================================================================
+#                                       Plotting temporal variation in spending
+#====================================================================================================
+
+
+#====================================================================================================
+#                                       Rescaling spending to 100% - lags
+#====================================================================================================
+
+
+# Graph with base 2007
+data <- data %>%
+  mutate(CVD_costs_100k_base2007 = 0)
+
+data <- data %>% 
+  mutate(CVD_costs_100k_base2007 = if_else(year == 2007, 1, CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2008, CVD_costs_100k/(lag(CVD_costs_100k)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2009, CVD_costs_100k/(lag(CVD_costs_100k, n = 2)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2010, CVD_costs_100k/(lag(CVD_costs_100k, n = 3)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2011, CVD_costs_100k/(lag(CVD_costs_100k, n = 4)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2012, CVD_costs_100k/(lag(CVD_costs_100k, n = 5)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2013, CVD_costs_100k/(lag(CVD_costs_100k, n = 6)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2014, CVD_costs_100k/(lag(CVD_costs_100k, n = 7)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2015, CVD_costs_100k/(lag(CVD_costs_100k, n = 8)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2016, CVD_costs_100k/(lag(CVD_costs_100k, n = 9)), CVD_costs_100k_base2007),
+         CVD_costs_100k_base2007 = if_else(year == 2017, CVD_costs_100k/(lag(CVD_costs_100k, n = 10)), CVD_costs_100k_base2007),
+  )
+
+# Male
+line_plot_base2007_male <- data %>%
+  filter(gender == "Male") %>% 
+  ggplot(aes(x = year, y = CVD_costs_100k_base2007, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1)) +
+  labs(x = "") +
+  labs(y = "%-Difference in CVD costsality compared to 2007") +
+  geom_hline(yintercept = 1)
+
+#line_plot_base2007_male
+
+# Female
+line_plot_base2007_female <- data %>%
+  filter(gender == "Female") %>% 
+  ggplot(aes(x = year, y = CVD_costs_100k_base2007, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference in CVD costsality compared to 2007") +
+  geom_hline(yintercept = 1)
+
+#line_plot_base2007_female
+
+
+
+# Graph with percentage change compared to previous year
+data <- data %>%
+  mutate(CVD_costs_100k_percent = 0)
+
+data <- data %>% 
+  mutate(CVD_costs_100k_percent = if_else(year == 2007, 0, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2008, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2009, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2010, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2011, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2012, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2013, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2014, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2015, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2016, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+         CVD_costs_100k_percent = if_else(year == 2017, (CVD_costs_100k/(lag(CVD_costs_100k)))-1, CVD_costs_100k_percent),
+  )
+
+# Male
+line_plot_percent_male <- data %>%
+  filter(gender == "Male") %>% 
+  ggplot(aes(x = year, y = CVD_costs_100k_percent, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference compared to previous year") +
+  geom_hline(yintercept = 0)
+
+#line_plot_percent_male
+
+# Female
+line_plot_percent_female <- data %>%
+  filter(gender == "Female") %>% 
+  ggplot(aes(x = year, y = CVD_costs_100k_percent, group = agegroup)) +
+  geom_line(aes(colour = agegroup)) +
+  facet_wrap(~ region, nrow = 4) +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(x = "") +
+  labs(y = "%-Difference compared to previous year") +
+  geom_hline(yintercept = 0)
+
+#line_plot_percent_female
+
+
+
+
+```
+
+## Temporal variation in CVD mortality across states
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+line_plot_percent_female
+
+
+```
+
+
 
 ## First differences using all years and states
 
@@ -511,6 +810,12 @@ scatter1
 
 # Results
 
+ 
+
+
+
+
+
 ## Regression results
 
 ## k-based value of a QALY  
@@ -525,6 +830,7 @@ scatter1
 - Simple linear model (alternative models and specifications/transformation?) 
 - Noise in the data was "remedied" by dropping yearly variation (good idea?)
 - Outpatient spending was not included (ideas on state aggregate data per age/gender group?)
+- Data quality of mortality data (Madea & Rothschild, 2010)
 - So far only CVD, will be extended to cancer
 
 ## Conclusion
@@ -534,7 +840,44 @@ scatter1
 ## Conclusion
 
 ![](fog2.jpg){#id .class width=100% height=100%}
-Github: 
+
+## Thank you for the attention!
+
+
+**Data, calculation and presentation:** 
+
+https://github.com/sebhim/Mortality_and_hospital_costs
+
+**Contact:**
+
 E-mail: himmler@eshpm.eur.nl
+
 Website: sebastian.himmler.com
+
 Twitter: @Sebastian_Him
+
+![](avatar.jpg){#id .class width=30% height=30%}
+
+
+# Appendix
+## Data sources
+
+![](data.png){#id .class width=100% height=100%}
+
+
+## Regression diagnostics
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+# Base model
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data, weights = population)
+
+#Regression diagnositcs
+# https://data.library.virginia.edu/diagnostic-plots/
+
+par(mfrow=c(2,2))
+plot(CVD_reg)
+
+```
+
+

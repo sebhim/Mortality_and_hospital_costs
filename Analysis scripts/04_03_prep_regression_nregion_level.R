@@ -431,11 +431,11 @@ data_nreg <- data_nreg %>% mutate(d_lag_cancer_costs_100k = diff(data_nreg$lag_c
 # Remove variables not needed for regression analysis
 data_nreg <- data_nreg %>% 
   select(ID, year, gender, agegroup, nielsenreg, population,
-         d_log_CVD_mort_100k, d_CVD_mort_100k,
-         d_log_CVD_costs_100k, d_CVD_costs_100k,
+         d_log_CVD_mort_100k, d_CVD_mort_100k, CVD_deaths,
+         d_log_CVD_costs_100k, d_CVD_costs_100k, CVD_costs_sum,
          d_lag_log_CVD_costs_100k, d_lag_CVD_costs_100k,
-         d_log_cancer_mort_100k, d_cancer_mort_100k,
-         d_log_cancer_costs_100k, d_cancer_costs_100k,
+         d_log_cancer_mort_100k, d_cancer_mort_100k, cancer_deaths,
+         d_log_cancer_costs_100k, d_cancer_costs_100k, cancer_costs_sum,
          d_lag_log_cancer_costs_100k, d_lag_cancer_costs_100k) 
 
 save(data_nreg, file = "./Data_ready/regression_nreg_level_four_period.rda")
