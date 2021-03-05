@@ -18,3 +18,6 @@ This relates to:
 05_ Conducts different regression analyses based on the different data sets created in 04_.
 
 The code in the R-markdown documents was extracted from the respective code chunks from 05_.
+
+prepare_data is a script in the main folder that uses the worcs package to upload the data sets created, to be used in the R-markdown files.
+This relates to data sets generated in script file 02_ and script files 04_. 
