@@ -1,21 +1,20 @@
-Plenty of descriptive analyses based on clean_data.rda:
-
-03_ Contains scripts for generating graphs. Final graph scripts need to be pasted into manuscript.Rmd
-
-
-Preparation of regression models:
-
-04_prep_regression Runs baseline panel data models
-
-04_prep_regression_collapse_state_test Reshapes data and runs regression on country level
-
-
-The finale descriptive and regression output as shown in the manuscript.pdf is creating using manuscript.Rmd, which contains slightly altered figures and regressions
-
-
 The two files starting with 
 
 01_ 
 02_ 
 
 were used to extract information on collected data of the German DRG statistics and mortality statistics
+
+
+03_ Contains scripts for generating graphs based on clean_data.rda. 
+
+04_ Contain scripts preparing differnt specifications of the data set. 
+
+This relates to:
+- different regional aggregation levels: country level, nielsen region level ("nreg"), state level
+- collapsing age categories to 10-year intervals ("agecollapse")
+- using either all years, four-year, three-year and two-year specifcations
+
+05_ Conducts different regression analyses based on the different data sets created in 04_.
+
+The code in the R-markdown documents was extracted from the respective code chunks from 05_.
