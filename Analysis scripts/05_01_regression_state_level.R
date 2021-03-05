@@ -131,6 +131,13 @@ par(mfrow=c(2,2))
 plot(CVD_reg)
 vif(CVD_reg)
 
+# 
+# 
+# - Taking $\alpha + \beta$ from most basic model implies that if spending is increased by 1 m EUR, CVD mortality above 60 is reduced by 27.7
+# - Assuming LE of 10 years (life tables) and QoL of 0.85 (Janssen et al., 2014) implies spending of 4,300 EUR/QALY
+# - Don't cite this!
+
+
 #====================================================================================================
 #                                               Final cancer FD model
 #====================================================================================================
@@ -221,6 +228,64 @@ scatter2 <- data %>%
 
 # Combine plot
 grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
+
+
+
+#====================================================================================================
+#                                       Plotting first differences
+#====================================================================================================
+
+
+# revert to data frame for plotting
+data <- as.data.frame(data)
+
+
+# Generate histogramms and scatterplots for first differences
+hist1 <- data %>% 
+  filter(d_CVD_mort_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_mort_100k)) +
+  geom_histogram() +
+  xlim(-200, 200) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist2 <- data %>% 
+  filter(d_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k)) +
+  geom_histogram() +
+  xlim(-5e+06,5e+06) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist3 <- data %>% 
+  filter(d_log_CVD_mort_100k != is.na) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_mort_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist4 <- data %>% 
+  filter(d_log_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+scatter1 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k, y = d_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0)
+
+scatter2 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k, y = d_log_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0)
+  
+
+
+# Combine plot
+grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
+
 
 
 #====================================================================================================
@@ -421,7 +486,7 @@ BIC(CVD_lin_year_g_c2, CVD_lin_year_g_cc2)
 #====================================================================================================
 
 # With weights?
-CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + I(d_CVD_costs_100k^2) +  d_lag_CVD_costs_100k + I(d_lag_CVD_costs_100k^2) + year + region + gender, data = data)
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k, data = data)
 summary(CVD_reg)
 
 coeftest(CVD_reg, vcov. = vcovHC, type = "HC0")
@@ -431,7 +496,7 @@ plot(CVD_reg)
 vif(CVD_reg)
 
 
-CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_log_lag_CVD_costs_100k + year + region + gender, data = data)
+CVD_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k + d_lag_log_CVD_costs_100k + year + region + gender, data = data)
 summary(CVD_log)
 
 coeftest(CVD_log, vcov. = vcovHC, type = "HC0")
@@ -446,10 +511,10 @@ vif(CVD_log)
 data_rob_state <- data %>% filter(region != "HB") 
 data_rob_state <- data_rob_state %>% filter(region != "SL") 
 
-CVD_reg_rob_state <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data_rob_state)
+CVD_reg_rob_state <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + I(d_CVD_costs_100k^2) + d_lag_CVD_costs_100k + year + region + gender, data = data_rob_state)
 summary(CVD_reg_rob_state)
 
-coeftest(CVD_reg_rob_state, vcov. = vcovHC, type = "HC1")
+coeftest(CVD_reg_rob_state, vcov. = vcovHC, type = "HC0")
 
 
 #====================================================================================================
@@ -640,10 +705,10 @@ grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
 #                                               Final CVD FD model
 #====================================================================================================
 
-CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data)
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + I(d_CVD_costs_100k^2) + d_lag_CVD_costs_100k + year + region + gender, data = data)
 summary(CVD_reg)
 
-coeftest(CVD_reg, vcov. = vcovHC, type = "HC1")
+coeftest(CVD_reg, vcov. = vcovHC, type = "HC0")
 
 par(mfrow=c(2,2))
 plot(CVD_reg)
@@ -653,7 +718,7 @@ vif(CVD_reg)
 #                                               Final cancer FD model
 #====================================================================================================
 
-cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + gender, data = data)
+cancer_reg <- lm(d_cancer_mort_100k ~ d_cancer_costs_100k + d_lag_cancer_costs_100k + year + region + gender, data = data)
 summary(cancer_reg)
 
 coeftest(cancer_reg, vcov. = vcovHC, type = "HC1")

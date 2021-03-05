@@ -6,6 +6,7 @@ checksums:
   shp_df.csv: 652b234af5a6d187f5f2f7816c529fe9
   data_state.csv: 75f775ddb79bc44820e1c361c996b85b
   data_state_4pm.csv: 96ea557205752fca73663c638ee280bb
+  data_agecollapse.csv: 2de11aeef74a1d36731d507a50df1f5a
 data:
   data.csv:
     codebook: codebook_data.Rmd
@@ -15,3 +16,5 @@ data:
     codebook: codebook_data_state.Rmd
   data_state_4pm.csv:
     codebook: codebook_data_state_4pm.Rmd
+  data_agecollapse.csv:
+    codebook: codebook_data_agecollapse.Rmd

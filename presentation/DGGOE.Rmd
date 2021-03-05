@@ -409,8 +409,8 @@ costs_reg_m + costs_reg_f +
 
 ## Regression model (1)
 
-First difference specification:
-$$\Delta m_i = \mu+ \alpha \Delta c_i ^t + \beta \Delta c_i ^{t-1} + \gamma_t + \tau_i + \epsilon_i$$
+**First difference specification:**
+$$\Delta m_i = \mu+ \alpha \Delta c_i ^t + \beta \Delta c_i ^{t-1} + \eta \Delta  c_i ^{t2} + \gamma_t + \tau_i + \epsilon_i$$
 $i$: Observation on Period X Agegroup X Gender X State level
 
 $\Delta m_i$: FD of CVD mortality
@@ -419,13 +419,22 @@ $\Delta c_i ^t$: FD of CVD spending
 
 $\Delta c_i ^{t-1}$ FD of lag CVD spending
 
-$\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
+$\Delta  c_i ^{t2}$ Squared FD of CVD mortality
+
+$\mu$, $\gamma_t$, $\tau_i$, $\eta_i$: intercept, year, gender, region dummies
+
+- Using $\alpha, \beta, \eta$ to estimate the effect of additional spending at the margin 
+
+
 
 ## Temporal variation in CVD mortality across states
 
 ```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
 
 # Age collapse
+
+library(ggpubr)
+
 
 
 #====================================================================================================
@@ -434,7 +443,7 @@ $\mu$, $\gamma_t$ + $\tau_i$: intercept, year dummies, gender dummy
 
 
 # Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
-data <- data %>%
+data <- data_agecollapse %>%
   filter(agegroup =="6" | agegroup == "7" | agegroup =="8" | agegroup =="9") %>% 
   filter(!(agegroup == "9" & gender =="Male"))
 
@@ -539,6 +548,7 @@ line_plot_base2007_female <- data %>%
   filter(gender == "Female") %>% 
   ggplot(aes(x = year, y = CVD_mort_100k_base2007, group = agegroup)) +
   geom_line(aes(colour = agegroup)) +
+  scale_fill_viridis_c() +
   facet_wrap(~ region, nrow = 4) +
   theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
   labs(x = "") +
@@ -581,7 +591,7 @@ line_plot_percent_male <- data %>%
 #line_plot_percent_male
 
 # Female
-line_plot_percent_female <- data %>%
+line_plot_percent_female_mort <- data %>%
   filter(gender == "Female") %>% 
   ggplot(aes(x = year, y = CVD_mort_100k_percent, group = agegroup)) +
   geom_line(aes(colour = agegroup)) +
@@ -704,7 +714,7 @@ line_plot_percent_female <- data %>%
 
 ```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
 
-line_plot_percent_female
+line_plot_percent_female_mort
 
 
 ```
@@ -793,27 +803,185 @@ scatter1
 
 ![](figures.png){#id .class width=100% height=100%}
 
-**Identifying assumption:** Time variant Variation in mortality trends that cannot be explained by period-specific and gender-specific time trends is caused by changes in medical spending.
+**Identifying assumption:** Time variant Variation in mortality trends that cannot be explained by period- region- and gender-specific time trends is caused by changes in medical spending.
 
 **Blind spot and implied assumption:** Variation in outpatient spending is captured by FD and included dummies
 
-## Life table calculations
+## Estimating opportunity cost-based threshold 
+
+**Life table calculations:**
+
+![](lifetable.png){#id .class width=100% height=100%}
+**ICER calculations using two scenarios:**
+
+
+![](ICER.png){#id .class width=40% height=40%}
+
 
 # Results
 
- 
+```{r results ='hide', message = FALSE, echo = FALSE, warning = FALSE}
+
+
+
+#====================================================================================================
+#                                       Conditioning on 60+
+#====================================================================================================
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
+data <- data_state_4pm %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" ) 
+
+
+#====================================================================================================
+#                                       CVD models
+#====================================================================================================
+
+# Recode variables times 1000
+data_log <- data
+data <- data %>%
+  mutate(d_CVD_costs_100k = d_CVD_costs_100k/1000000) %>% 
+  mutate(d_lag_CVD_costs_100k = d_lag_CVD_costs_100k/1000000)
+
+# Models
+base_lag <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  d_lag_CVD_costs_100k, data = data)
+base_lag_sq <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  d_lag_CVD_costs_100k + I(d_CVD_costs_100k^2) , data = data)
+base_lag_sq_region_year <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  d_lag_CVD_costs_100k + I(d_CVD_costs_100k^2) + region + year, data = data)
+base_lag_sq_region_year_gender <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  d_lag_CVD_costs_100k + I(d_CVD_costs_100k^2) + region + year + gender, data = data)
+base_lag_sq_region_year_gender_agegroup <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  d_lag_CVD_costs_100k + I(d_CVD_costs_100k^2) + region + year + gender + agegroup, data = data)
 
 
 
 
+rob_se <- list(sqrt(diag(vcovHC(base_lag, type = "HC0"))),
+    sqrt(diag(vcovHC(base_lag_sq, type = "HC0"))),
+    sqrt(diag(vcovHC(base_lag_sq_region_year, type = "HC0"))),
+    sqrt(diag(vcovHC(base_lag_sq_region_year_gender, type = "HC0"))),
+    sqrt(diag(vcovHC(base_lag_sq_region_year_gender_agegroup, type = "HC0")))
+    )
 
-## Regression results
 
-## k-based value of a QALY  
+star = stargazer(base_lag, base_lag_sq, base_lag_sq_region_year, base_lag_sq_region_year_gender, base_lag_sq_region_year_gender_agegroup,
+          type = "latex",
+          digits = 2,
+          se = rob_se,
+          header = F,
+          title = "",
+          single.row = F,
+          model.numbers = F,
+          font.size = "tiny",
+          omit = c("Constant", "region", "year"),
+          omit.stat=c("rsq", "n", "ser", "f"),
+          no.space = T,
+          column.sep.width = "-8pt",
+          dep.var.caption = (""),
+          dep.var.labels = "FD CVD mortality",
+          covariate.labels = c("FD CVD spending (m EUR)",
+                               "Lag FD CVD spending (m EUR)",
+                               "FD CVD spending (m EUR) squared",
+                               "Male",
+                               "Aged 65-69",
+                               "Aged 70-74",
+                               "Aged 75-79",
+                               "Aged 80-84",
+                               "Aged 85-89",
+                               "Aged 90+" 
+                               ), 
+          column.labels = c("(I)", "(II)", "(III)", "(IV)", "(V)"),
+          notes = "Intercept omitted; N = 624; ∗ p<0.1; ∗∗ p<0.05; ∗∗∗ p<0.01",
+          notes.align = "l",
+          notes.append = F,
+          add.lines = list(c("States (N=15)", "No", "No", "Yes", "Yes", "Yes"), c("Periods (N=2)", "No", "No", "Yes", "Yes", "Yes"))
+          )
+
+star = sub('^.+\\caption.+$','', star)
+
+
+# Log models
+base_lag_log <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k +  d_lag_log_CVD_costs_100k, data = data_log)
+base_log_lag_region_year_gender_agegroup <- lm(d_log_CVD_mort_100k ~ d_log_CVD_costs_100k +  d_lag_log_CVD_costs_100k + region + year + gender + agegroup, data = data_log)
+
+
+
+
+rob_se_log <- list(sqrt(diag(vcovHC(base_lag_log, type = "HC0"))),
+    sqrt(diag(vcovHC(base_log_lag_region_year_gender_agegroup, type = "HC0")))
+    )
+
+
+star_log = stargazer(base_lag_log, base_log_lag_region_year_gender_agegroup,
+          type = "latex",
+          digits = 2,
+          se = rob_se_log,
+          header = F,
+          title = "",
+          single.row = F,
+          model.numbers = F,
+          font.size = "tiny",
+          omit = c("Constant", "region", "year"),
+          omit.stat=c("rsq", "n", "ser", "f"),
+          no.space = T,
+          column.sep.width = "-2pt",
+          dep.var.caption = (""),
+          dep.var.labels = "FD log CVD mortality",
+          covariate.labels = c("FD log CVD spending EUR",
+                               "FD log lag CVD spending EUR",
+                               "Male",
+                               "Aged 65-69",
+                               "Aged 70-74",
+                               "Aged 75-79",
+                               "Aged 80-84",
+                               "Aged 85-89",
+                               "Aged 90+" 
+                               ), 
+          column.labels = c("(I)", "(II)"),
+          notes = "Intercept omitted; N = 624; ∗ p<0.1; ∗∗ p<0.05; ∗∗∗ p<0.01",
+          notes.align = "l",
+          notes.append = F,
+          add.lines = list(c("States (N=15)", "No", "Yes"), c("Periods (N=2)", "No", "Yes"))
+          )
+
+star_log = sub('^.+\\caption.+$','', star_log)
+
+  
+
+
+```
+
+## Regression results: Linear model
+
+
+```{r results ='asis', message = FALSE, echo = FALSE, warning = FALSE}
+
+cat(star, sep='\n')
+
+```
+
+
+## Regression results: Log model
+
+```{r results ='asis', message = FALSE, echo = FALSE, warning = FALSE}
+
+cat(star_log, sep='\n')
+
+```
 
 ## Robustness checks
 
 - Excuding small states (HB, HH, SL)
+- Merging states to super regions (7 Nielsen regions)
+- Collapsing agegroups to 10 year intervals
+- Conducting analysis using two or three time periods instead of four
+- ...
+
+## k-based value of a QALY: Back on the envelop  
+
+
+
+![](env.jpg){#id .class width=80% height=80%}
+
+
+
 
 # Discussion
 
@@ -821,8 +989,9 @@ scatter1
 - Simple linear model (alternative models and specifications/transformation?) 
 - Noise in the data was "remedied" by dropping yearly variation (good idea?)
 - Outpatient spending was not included (ideas on state aggregate data per age/gender group?)
-- Data quality of mortality data (Madea & Rothschild, 2010)
-- So far only CVD, will be extended to cancer
+- Adding state level information on health behaviours? Data sources?
+- Replication: Period does matter!
+- Obtain more information on cardiovascular advances in period under review (and possibly use CVD subcategories)
 
 ## Conclusion
 
@@ -856,12 +1025,87 @@ Twitter: @Sebastian_Him
 ![](data.png){#id .class width=100% height=100%}
 
 
+## Histogramms and scatter plots of FD
+
+```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
+
+
+
+#====================================================================================================
+#                                       Conditioning on 60+
+#====================================================================================================
+
+
+# Drop below 60, low variation in agegroups before (similar to van Baal et al., 2018), lot of noise
+data <- data_state_4pm %>% filter(agegroup =="60-64" | agegroup == "65-69" | agegroup =="70-74" | agegroup =="75-79" | agegroup =="80-84" | agegroup =="85-89" | agegroup =="90+" ) 
+
+
+#====================================================================================================
+#                                       Plotting first differences
+#====================================================================================================
+
+
+# revert to data frame for plotting
+data <- as.data.frame(data)
+
+
+# Generate histogramms and scatterplots for first differences
+hist1 <- data %>% 
+  filter(d_CVD_mort_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_mort_100k)) +
+  geom_histogram() +
+  xlim(-200, 200) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist2 <- data %>% 
+  filter(d_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k)) +
+  geom_histogram() +
+  xlim(-5e+06,5e+06) +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist3 <- data %>% 
+  filter(d_log_CVD_mort_100k != is.na) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_mort_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+hist4 <- data %>% 
+  filter(d_log_CVD_costs_100k !=0) %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k)) +
+  geom_histogram() +
+  stat_central_tendency(type = "median", linetype = "dashed")
+
+scatter1 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_CVD_costs_100k, y = d_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0)
+
+scatter2 <- data %>%
+  ggplot(data = data, mapping = aes(x = d_log_CVD_costs_100k, y = d_log_CVD_mort_100k)) +
+  geom_point() +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0)
+  
+
+
+# Combine plot
+grid.arrange(hist1, hist3, hist2, hist4, scatter1, scatter2)
+
+
+
+```
+
+
 ## Regression diagnostics
 
 ```{r, echo=FALSE, results='hide', fig.keep='all', message = FALSE, warning = FALSE, fig.align="center", fig.asp= 0.7}
 
 # Base model
-CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k + d_lag_CVD_costs_100k + year + gender, data = data, weights = population)
+CVD_reg <- lm(d_CVD_mort_100k ~ d_CVD_costs_100k +  I(d_CVD_costs_100k^2) + d_lag_CVD_costs_100k + year + region + gender, data = data_state_4pm, weights = population)
 
 #Regression diagnositcs
 # https://data.library.virginia.edu/diagnostic-plots/
